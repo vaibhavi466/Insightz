@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranger Access Control</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #121212; color: #e0e0e0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { background: #1e1e1e; padding: 40px; border-radius: 8px; border: 1px solid #333; width: 350px; text-align: center; box-shadow: 0 0 20px rgba(241, 196, 15, 0.1); }
+        h1 { color: #f1c40f; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 1px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; background: #252525; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
+        input:focus { border-color: #f1c40f; outline: none; }
+        button { width: 100%; padding: 12px; background: #f1c40f; border: none; color: black; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; font-size: 1rem; }
+        button:hover { background: #d4ac0d; }
+        .toggle { margin-top: 20px; font-size: 0.9rem; color: #888; cursor: pointer; text-decoration: underline; }
+        .toggle:hover { color: #f1c40f; }
+        .error { color: #e74c3c; margin-top: 10px; font-size: 0.9rem; min-height: 20px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>⚡ Ranger Login</h1>
+    
+    <div id="loginForm">
+        <input type="text" id="l_user" placeholder="Username">
+        <input type="password" id="l_pass" placeholder="Password">
+        <button onclick="login()">Access Console</button>
+        <div class="toggle" onclick="toggleMode()">New here? Create Account</div>
+    </div>
+
+    <div id="signupForm" class="hidden">
+        <input type="text" id="s_user" placeholder="Choose Username">
+        <input type="password" id="s_pass" placeholder="Choose Password">
+        <button onclick="signup()">Register Ranger</button>
+        <div class="toggle" onclick="toggleMode()">Have an account? Login</div>
+    </div>
+
+    <div id="msg" class="error"></div>
+</div>
+
+<script>
+    const API = "http://127.0.0.1:8000"; // Ensure this matches your Uvicorn port
+
+    function toggleMode() {
+        document.getElementById("loginForm").classList.toggle("hidden");
+        document.getElementById("signupForm").classList.toggle("hidden");
+        document.getElementById("msg").innerText = "";
+    }
+
+    async function signup() {
+        const u = document.getElementById("s_user").value;
+        const p = document.getElementById("s_pass").value;
+        if(!u || !p) return showMsg("Fill all fields");
+
+        try {
+            const res = await fetch(`${API}/signup`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({username: u, password: p})
+            });
+            const data = await res.json();
+            if(!res.ok) throw new Error(data.detail);
+            
+            showMsg("Success! Please login now.", "green");
+            setTimeout(toggleMode, 1500);
+        } catch(e) { showMsg(e.message); }
+    }
+
+    async function login() {
+        const u = document.getElementById("l_user").value;
+        const p = document.getElementById("l_pass").value;
+        if(!u || !p) return showMsg("Fill all fields");
+
+        try {
+            const res = await fetch(`${API}/login`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({username: u, password: p})
+            });
+            const data = await res.json();
+            if(!res.ok) throw new Error(data.detail);
+
+            // SAVE TOKEN AND REDIRECT
+            localStorage.setItem("ranger_token", data.token);
+            localStorage.setItem("ranger_user", data.username);
+            window.location.href = "index.html"; 
+        } catch(e) { showMsg(e.message); }
+    }
+
+    function showMsg(txt, color="#e74c3c") {
+        const m = document.getElementById("msg");
+        m.innerText = txt;
+        m.style.color = color;
+    }
+</script>
+
+</body>
+</html>

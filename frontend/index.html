@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doc-Sage Intel Console</title>
+    <style>
+        :root { --bg: #121212; --card: #1e1e1e; --accent: #f1c40f; --text: #e0e0e0; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* SIDEBAR (Draggable Items) */
+        .sidebar { width: 300px; background: #181818; padding: 20px; border-right: 1px solid #333; display: flex; flex-direction: column; }
+        .sidebar h2 { color: var(--accent); margin-top: 0; font-size: 1.2rem; }
+        .doc-list { flex: 1; overflow-y: auto; margin-top: 10px; }
+        
+        .doc-item { 
+            background: var(--card); padding: 10px; margin-bottom: 8px; border-radius: 6px; 
+            border: 1px solid #333; display: flex; align-items: center; cursor: grab; transition: 0.2s; 
+        }
+        .doc-item:hover { border-color: var(--accent); }
+        .doc-item:active { cursor: grabbing; }
+        
+        .doc-item input { margin-right: 10px; transform: scale(1.2); cursor: pointer; }
+        .doc-info { display: flex; flex-direction: column; pointer-events: none; /* Let clicks pass to parent for drag */ }
+        .doc-name { font-weight: bold; font-size: 0.9em; }
+        .doc-cat { font-size: 0.75em; color: #888; text-transform: uppercase; margin-top: 2px; }
+
+        /* MAIN CONTENT */
+        .main { flex: 1; padding: 30px; display: flex; flex-direction: column; overflow-y: auto; }
+        
+        /* UPLOAD ZONE */
+        .upload-zone { border: 2px dashed #444; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; transition: 0.3s; }
+        .upload-zone:hover { border-color: var(--accent); background: #1a1a1a; }
+        
+        /* TABS */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        .tab { padding: 10px 20px; cursor: pointer; border-radius: 4px; font-weight: bold; color: #888; }
+        .tab.active { background: var(--accent); color: #000; }
+        
+        /* ACTION PANELS (Drop Targets) */
+        .panel { display: none; border: 2px solid transparent; border-radius: 8px; padding: 10px; transition: 0.2s; }
+        .panel.active { display: block; animation: fadeIn 0.3s; }
+        
+        /* Dragover Effect */
+        .panel.drag-active { border-color: var(--accent); background: #252525; }
+
+        input[type="text"] { width: 100%; padding: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
+        button.action-btn { background: var(--accent); border: none; padding: 10px 20px; color: black; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+        button.action-btn:hover { background: #d4ac0d; }
+
+        /* OUTPUT BOX */
+        .result-box { background: #222; padding: 20px; border-radius: 8px; border-left: 4px solid var(--accent); margin-top: 20px; min-height: 100px; white-space: pre-wrap; line-height: 1.6; }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+
+    <script>
+    // SECURITY CHECK
+    if (!localStorage.getItem("ranger_token")) {
+        window.location.href = "login.html";
+    }
+    </script>
+
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>📂 Intel Library</h2>
+        <div style="font-size: 0.8em; color: #666; margin-bottom: 10px;">Drag files from here → Drop into panels</div>
+        <div id="docList" class="doc-list">
+            <div style="color: #666; font-style: italic;">Loading...</div>
+        </div>
+        <button onclick="refreshDocs()" style="margin-top: 10px; background: #333; color: white; border: none; padding: 8px; cursor: pointer; width: 100%;">🔄 Refresh List</button>
+        <button onclick="logout()" style="margin-top: 10px; background: #e74c3c; color: white; border: none; padding: 8px; cursor: pointer; width: 100%;">🛑 Logout</button>
+    </div>
+
+    <div class="main">
+        <h1 style="color: var(--accent); margin-top: 0;">⚡ Yellow Ranger Console</h1>
+        
+        <div class="upload-zone">
+            <h3>⬆️ Upload New Intel (From Laptop)</h3>
+            <input type="file" id="fileInput">
+            <button class="action-btn" onclick="uploadFile()">Upload File</button>
+            <p id="uploadStatus" style="color: #aaa; margin-top: 10px;"></p>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('search')">🔍 Semantic Search</div>
+            <div class="tab" onclick="switchTab('cross')">🔗 Cross-Summary</div>
+        </div>
+
+        <div id="searchPanel" class="panel active" 
+             ondrop="dropToSearch(event)" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
+            <h3>Ask the Database</h3>
+            <input type="text" id="queryInput" placeholder="Type here OR Drop a file from sidebar to focus on it...">
+            <button class="action-btn" onclick="performSearch()">Execute Search</button>
+            <div id="searchResult" class="result-box">Ready for query.</div>
+        </div>
+
+        <div id="crossPanel" class="panel"
+             ondrop="dropToCross(event)" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
+            <h3>Connect Intelligence</h3>
+            <p>Select documents from sidebar (checkboxes) OR <b>Drag & Drop them here</b>.</p>
+            <button class="action-btn" onclick="performCrossSummary()">Generate Connection Report</button>
+            <div id="crossResult" class="result-box">Select files and click generate.</div>
+        </div>
+    </div>
+
+<script>
+    const API = "http://127.0.0.1:8000";
+
+    // --- LOGOUT FUNCTION ADDED HERE ---
+    function logout() {
+        localStorage.removeItem("ranger_token");
+        window.location.href = "login.html";
+    }
+
+    // --- DRAG AND DROP LOGIC ---
+    
+    function allowDrop(ev) {
+        ev.preventDefault(); // Essential to allow dropping
+        ev.currentTarget.classList.add('drag-active'); // Visual cue
+    }
+
+    function leaveDrop(ev) {
+        ev.currentTarget.classList.remove('drag-active');
+    }
+
+    function drag(ev) {
+        // Send the filename when dragging starts
+        ev.dataTransfer.setData("filename", ev.target.getAttribute('data-filename'));
+    }
+
+    function dropToSearch(ev) {
+        ev.preventDefault();
+        ev.currentTarget.classList.remove('drag-active');
+        const filename = ev.dataTransfer.getData("filename");
+        if(filename) {
+            // Auto-fill the search box with a "Context" query
+            const input = document.getElementById("queryInput");
+            input.value = `Context: ${filename}. Summarize this document.`;
+            // Optional: Auto-execute
+            // performSearch(); 
+        }
+    }
+
+    function dropToCross(ev) {
+        ev.preventDefault();
+        ev.currentTarget.classList.remove('drag-active');
+        const filename = ev.dataTransfer.getData("filename");
+        
+        if(filename) {
+            // Find the checkbox in the sidebar and CHECK it
+            const checkbox = document.querySelector(`.doc-select[value="${filename}"]`);
+            if(checkbox) {
+                checkbox.checked = true;
+                // Visual confirmation
+                const out = document.getElementById("crossResult");
+                out.innerText = `[+] Added "${filename}" to selection. Drop more files or click Generate.`;
+            }
+        }
+    }
+
+    // --- CORE FUNCTIONS (Same as before, updated HTML generation) ---
+
+    async function refreshDocs() {
+        const list = document.getElementById("docList");
+        try {
+            const res = await fetch(`${API}/documents`);
+            const docs = await res.json();
+            
+            list.innerHTML = "";
+            if(docs.length === 0) { list.innerHTML = "<div style='color:#666'>No docs found.</div>"; return; }
+
+            docs.forEach(doc => {
+                const item = document.createElement("div");
+                item.className = "doc-item";
+                item.setAttribute('draggable', 'true'); // Make Draggable
+                item.setAttribute('data-filename', doc.filename); // Store ID
+                item.ondragstart = drag; // Attach Handler
+
+                const safeSummary = doc.summary ? doc.summary.replace(/'/g, "\\'").replace(/"/g, '&quot;') : "No summary";
+
+                item.innerHTML = `
+                    <div style="display:flex; align-items:center; width:100%; pointer-events: none;">
+                        <input type="checkbox" value="${doc.filename}" class="doc-select" style="pointer-events: auto;">
+                        <div class="doc-info" style="flex:1; padding-left: 10px;">
+                            <span class="doc-name">${doc.filename}</span>
+                            <span class="doc-cat">${doc.category}</span>
+                        </div>
+                        <button onclick="event.stopPropagation(); alert('${safeSummary}')" 
+                                style="pointer-events: auto; background:none; border:1px solid #555; color:#aaa; cursor:pointer; padding:2px 8px; font-size:0.8em; border-radius:4px;">
+                            📄
+                        </button>
+                    </div>
+                `;
+                
+                // Row click toggles checkbox (UX improvement)
+                item.onclick = function(e) {
+                    if (e.target.type !== 'checkbox' && e.target.tagName !== 'BUTTON') {
+                        const cb = this.querySelector(".doc-select");
+                        cb.checked = !cb.checked;
+                    }
+                };
+                
+                list.appendChild(item);
+            });
+        } catch (e) { list.innerHTML = "<div style='color:red'>Server Offline</div>"; }
+    }
+
+    async function uploadFile() {
+        const fileInput = document.getElementById("fileInput");
+        const status = document.getElementById("uploadStatus");
+        if(!fileInput.files[0]) return alert("Select a file first!");
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+        status.innerText = "Processing... (Reading & Categorizing)";
+        try {
+            const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
+            const data = await res.json();
+            status.innerText = `Success! Categorized as: ${data.category}`;
+            refreshDocs(); 
+        } catch (e) { status.innerText = "Error: " + e.message; }
+    }
+
+    async function performSearch() {
+        const query = document.getElementById("queryInput").value;
+        const out = document.getElementById("searchResult");
+        out.innerText = "Searching...";
+        try {
+            const res = await fetch(`${API}/search?query=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            out.innerText = data.answer + "\n\n[" + data.citation + "]";
+        } catch (e) { out.innerText = "Error searching."; }
+    }
+
+    async function performCrossSummary() {
+        const out = document.getElementById("crossResult");
+        const checkboxes = document.querySelectorAll(".doc-select:checked");
+        const selected = Array.from(checkboxes).map(cb => cb.value);
+        if(selected.length === 0) return alert("Select at least 1 document!");
+        out.innerText = "Synthesizing Report...";
+        try {
+            const res = await fetch(`${API}/cross-summary`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ filenames: selected })
+            });
+            const data = await res.json();
+            out.innerText = data.cross_summary;
+        } catch (e) { out.innerText = "Error generating report."; }
+    }
+
+    function switchTab(tab) {
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(tab + 'Panel').classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    refreshDocs();
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doc-Sage Intel Console</title>
+    <style>
+        :root { --bg: #121212; --card: #1e1e1e; --accent: #f1c40f; --text: #e0e0e0; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* SIDEBAR (Draggable Items) */
+        .sidebar { width: 300px; background: #181818; padding: 20px; border-right: 1px solid #333; display: flex; flex-direction: column; }
+        .sidebar h2 { color: var(--accent); margin-top: 0; font-size: 1.2rem; }
+        .doc-list { flex: 1; overflow-y: auto; margin-top: 10px; }
+        
+        .doc-item { 
+            background: var(--card); padding: 10px; margin-bottom: 8px; border-radius: 6px; 
+            border: 1px solid #333; display: flex; align-items: center; cursor: grab; transition: 0.2s; 
+        }
+        .doc-item:hover { border-color: var(--accent); }
+        .doc-item:active { cursor: grabbing; }
+        
+        .doc-item input { margin-right: 10px; transform: scale(1.2); cursor: pointer; }
+        .doc-info { display: flex; flex-direction: column; pointer-events: none; /* Let clicks pass to parent for drag */ }
+        .doc-name { font-weight: bold; font-size: 0.9em; }
+        .doc-cat { font-size: 0.75em; color: #888; text-transform: uppercase; margin-top: 2px; }
+
+        /* MAIN CONTENT */
+        .main { flex: 1; padding: 30px; display: flex; flex-direction: column; overflow-y: auto; }
+        
+        /* UPLOAD ZONE */
+        .upload-zone { border: 2px dashed #444; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; transition: 0.3s; }
+        .upload-zone:hover { border-color: var(--accent); background: #1a1a1a; }
+        
+        /* TABS */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        .tab { padding: 10px 20px; cursor: pointer; border-radius: 4px; font-weight: bold; color: #888; }
+        .tab.active { background: var(--accent); color: #000; }
+        
+        /* ACTION PANELS (Drop Targets) */
+        .panel { display: none; border: 2px solid transparent; border-radius: 8px; padding: 10px; transition: 0.2s; }
+        .panel.active { display: block; animation: fadeIn 0.3s; }
+        
+        /* Dragover Effect */
+        .panel.drag-active { border-color: var(--accent); background: #252525; }
+
+        input[type="text"] { width: 100%; padding: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
+        button.action-btn { background: var(--accent); border: none; padding: 10px 20px; color: black; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
+        button.action-btn:hover { background: #d4ac0d; }
+
+        /* OUTPUT BOX */
+        .result-box { background: #222; padding: 20px; border-radius: 8px; border-left: 4px solid var(--accent); margin-top: 20px; min-height: 100px; white-space: pre-wrap; line-height: 1.6; }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+
+    <script>
+    // SECURITY CHECK
+    if (!localStorage.getItem("ranger_token")) {
+        window.location.href = "login.html";
+    }
+</script>
+
+</head>
+<body>
+
+    <div class="sidebar">
+        <h2>📂 Intel Library</h2>
+        <div style="font-size: 0.8em; color: #666; margin-bottom: 10px;">Drag files from here → Drop into panels</div>
+        <div id="docList" class="doc-list">
+            <div style="color: #666; font-style: italic;">Loading...</div>
+        </div>
+        <button onclick="refreshDocs()" style="margin-top: 10px; background: #333; color: white; border: none; padding: 8px; cursor: pointer;">🔄 Refresh List</button>
+    </div>
+
+    <div class="main">
+        <h1 style="color: var(--accent); margin-top: 0;">⚡ Yellow Ranger Console</h1>
+        
+        <div class="upload-zone">
+            <h3>⬆️ Upload New Intel (From Laptop)</h3>
+            <input type="file" id="fileInput">
+            <button class="action-btn" onclick="uploadFile()">Upload File</button>
+            <p id="uploadStatus" style="color: #aaa; margin-top: 10px;"></p>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('search')">🔍 Semantic Search</div>
+            <div class="tab" onclick="switchTab('cross')">🔗 Cross-Summary</div>
+        </div>
+
+        <div id="searchPanel" class="panel active" 
+             ondrop="dropToSearch(event)" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
+            <h3>Ask the Database</h3>
+            <input type="text" id="queryInput" placeholder="Type here OR Drop a file from sidebar to focus on it...">
+            <button class="action-btn" onclick="performSearch()">Execute Search</button>
+            <div id="searchResult" class="result-box">Ready for query.</div>
+        </div>
+
+        <div id="crossPanel" class="panel"
+             ondrop="dropToCross(event)" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
+            <h3>Connect Intelligence</h3>
+            <p>Select documents from sidebar (checkboxes) OR <b>Drag & Drop them here</b>.</p>
+            <button class="action-btn" onclick="performCrossSummary()">Generate Connection Report</button>
+            <div id="crossResult" class="result-box">Select files and click generate.</div>
+        </div>
+    </div>
+
+<script>
+    const API = "http://127.0.0.1:8000";
+
+    // --- DRAG AND DROP LOGIC ---
+    
+    function allowDrop(ev) {
+        ev.preventDefault(); // Essential to allow dropping
+        ev.currentTarget.classList.add('drag-active'); // Visual cue
+    }
+
+    function leaveDrop(ev) {
+        ev.currentTarget.classList.remove('drag-active');
+    }
+
+    function drag(ev) {
+        // Send the filename when dragging starts
+        ev.dataTransfer.setData("filename", ev.target.getAttribute('data-filename'));
+    }
+
+    function dropToSearch(ev) {
+        ev.preventDefault();
+        ev.currentTarget.classList.remove('drag-active');
+        const filename = ev.dataTransfer.getData("filename");
+        if(filename) {
+            // Auto-fill the search box with a "Context" query
+            const input = document.getElementById("queryInput");
+            input.value = `Context: ${filename}. Summarize this document.`;
+            // Optional: Auto-execute
+            // performSearch(); 
+        }
+    }
+
+    function dropToCross(ev) {
+        ev.preventDefault();
+        ev.currentTarget.classList.remove('drag-active');
+        const filename = ev.dataTransfer.getData("filename");
+        
+        if(filename) {
+            // Find the checkbox in the sidebar and CHECK it
+            const checkbox = document.querySelector(`.doc-select[value="${filename}"]`);
+            if(checkbox) {
+                checkbox.checked = true;
+                // Visual confirmation
+                const out = document.getElementById("crossResult");
+                out.innerText = `[+] Added "${filename}" to selection. Drop more files or click Generate.`;
+            }
+        }
+    }
+
+    // --- CORE FUNCTIONS (Same as before, updated HTML generation) ---
+
+    async function refreshDocs() {
+        const list = document.getElementById("docList");
+        try {
+            const res = await fetch(`${API}/documents`);
+            const docs = await res.json();
+            
+            list.innerHTML = "";
+            if(docs.length === 0) { list.innerHTML = "<div style='color:#666'>No docs found.</div>"; return; }
+
+            docs.forEach(doc => {
+                const item = document.createElement("div");
+                item.className = "doc-item";
+                item.setAttribute('draggable', 'true'); // Make Draggable
+                item.setAttribute('data-filename', doc.filename); // Store ID
+                item.ondragstart = drag; // Attach Handler
+
+                const safeSummary = doc.summary ? doc.summary.replace(/'/g, "\\'").replace(/"/g, '&quot;') : "No summary";
+
+                item.innerHTML = `
+                    <div style="display:flex; align-items:center; width:100%; pointer-events: none;">
+                        <input type="checkbox" value="${doc.filename}" class="doc-select" style="pointer-events: auto;">
+                        <div class="doc-info" style="flex:1; padding-left: 10px;">
+                            <span class="doc-name">${doc.filename}</span>
+                            <span class="doc-cat">${doc.category}</span>
+                        </div>
+                        <button onclick="event.stopPropagation(); alert('${safeSummary}')" 
+                                style="pointer-events: auto; background:none; border:1px solid #555; color:#aaa; cursor:pointer; padding:2px 8px; font-size:0.8em; border-radius:4px;">
+                            📄
+                        </button>
+                    </div>
+                `;
+                
+                // Row click toggles checkbox (UX improvement)
+                item.onclick = function(e) {
+                    if (e.target.type !== 'checkbox' && e.target.tagName !== 'BUTTON') {
+                        const cb = this.querySelector(".doc-select");
+                        cb.checked = !cb.checked;
+                    }
+                };
+                
+                list.appendChild(item);
+            });
+        } catch (e) { list.innerHTML = "<div style='color:red'>Server Offline</div>"; }
+    }
+
+    async function uploadFile() {
+        const fileInput = document.getElementById("fileInput");
+        const status = document.getElementById("uploadStatus");
+        if(!fileInput.files[0]) return alert("Select a file first!");
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+        status.innerText = "Processing... (Reading & Categorizing)";
+        try {
+            const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
+            const data = await res.json();
+            status.innerText = `Success! Categorized as: ${data.category}`;
+            refreshDocs(); 
+        } catch (e) { status.innerText = "Error: " + e.message; }
+    }
+
+    async function performSearch() {
+        const query = document.getElementById("queryInput").value;
+        const out = document.getElementById("searchResult");
+        out.innerText = "Searching...";
+        try {
+            const res = await fetch(`${API}/search?query=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            out.innerText = data.answer + "\n\n[" + data.citation + "]";
+        } catch (e) { out.innerText = "Error searching."; }
+    }
+
+    async function performCrossSummary() {
+        const out = document.getElementById("crossResult");
+        const checkboxes = document.querySelectorAll(".doc-select:checked");
+        const selected = Array.from(checkboxes).map(cb => cb.value);
+        if(selected.length === 0) return alert("Select at least 1 document!");
+        out.innerText = "Synthesizing Report...";
+        try {
+            const res = await fetch(`${API}/cross-summary`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ filenames: selected })
+            });
+            const data = await res.json();
+            out.innerText = data.cross_summary;
+        } catch (e) { out.innerText = "Error generating report."; }
+    }
+
+    function switchTab(tab) {
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(tab + 'Panel').classList.add('active');
+        event.target.classList.add('active');
+    }
+
+    refreshDocs();
+</script>
+
+</body>
+</html> -->
+
+
+
