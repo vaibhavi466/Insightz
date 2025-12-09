@@ -66,6 +66,7 @@ pypdf
 
 ## Error Handling and reliability features
 * **Resilient Ingestion:** Uses a Zero-Crash policy—if AI classification fails, it safely falls back to rule-based labeling (e.g., “General” or “Picture”) so every file is always saved.
+* **Optimized Model Selection (gemini-flash-latest):** While the Free Tier imposes strict Requests Per Minute (RPM) limits, the model's speed ensures single transactions complete instantly, maximizing the usable throughput.
 
 
 ## AI/ML integration details
