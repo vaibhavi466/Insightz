@@ -53,8 +53,10 @@ faiss-cpu
 pdfplumber
 pypdf
 --> run pip install -r requirements.txt
-
-
+* **Step C: Configure API Keys:** Create a file named backend/.env & paste your key: GOOGLE_API_KEY=AIzaSy...<YOUR_KEY_HERE>
+* **Step D: Start the Server:** run uvicorn main:app --reload on backend
+* **Step E: Install Node Libraries:** run npm install-->npm run dev on frontend
+* **Step F: How to Use (Demo Flow):** Go to http://localhost:5173
 
 ## Working Features 
 
