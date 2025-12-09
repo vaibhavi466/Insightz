@@ -67,7 +67,11 @@ pypdf
 ## Error Handling and reliability features
 
 ## AI/ML integration details
-
+* RAG Pipeline: Chunking → Embeddings (text-embedding-004) → FAISS for semantic search.
+* LLM Reasoning: Gemini-Flash-Latest for summaries, Q&A, and cross-document insights
+* Zero-Shot Classification: Auto-detects document type using LLM (no training needed).
+* Vision OCR: Gemini Vision extracts text & meaning from images.
+  
 ## Future Improvements
 
 
