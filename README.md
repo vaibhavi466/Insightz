@@ -22,12 +22,12 @@ A secure, multi-user RAG (Retrieval-Augmented Generation) application that trans
 * **File Processing**	Pdfplumber
 
 ## Features Implemented
-Multi-Modal Ingestion: Processes PDFs, text, and images with OCR.
-Semantic Search: Answers natural-language questions from document content.
-Cross-Document Summary: Merges insights across multiple files.
-Page-Wise Breakdown: Summarizes PDFs page by page.
-Data Isolation: Each user accesses only their own files securely.
-Resilient Mode: Uses cached responses if the AI API rate-limits.
+* Multi-Modal Ingestion: Processes PDFs, text, and images with OCR.
+* Semantic Search: Answers natural-language questions from document content.
+* Cross-Document Summary: Merges insights across multiple files.
+* Page-Wise Breakdown: Summarizes PDFs page by page.
+* Data Isolation: Each user accesses only their own files securely.
+* Resilient Mode: Uses cached responses if the AI API rate-limits.
 
 ## System Architecture
 
