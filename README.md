@@ -1,6 +1,8 @@
-# INSIGHTZ
+# INSIGHTZ : Poject Overview
 
 Insightz helps you find information in your documents without doing the heavy lifting. Instead of reading through long, complex reports yourself, you upload them to the system. It reads them for you, so you can just ask it questions and get instant, accurate answers backed by proof from the original file.
+
+## Problem Statement: 4
 
 ## Team Members
 
@@ -17,6 +19,24 @@ Insightz helps you find information in your documents without doing the heavy li
 * **Vector Database:** Pinecone,FAISS
 
 ## Features Implemented
+
+
+## System Architecture
+
+## API Documentation
+
+## SetUp Instructions
+
+
+## Working Features 
+
+
+## Error Handling and reliability features
+
+## AI/ML integration details
+
+## Future Improvements
+
 
 
 
