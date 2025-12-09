@@ -76,7 +76,6 @@ pypdf
 * Vision OCR: Gemini Vision extracts text & meaning from images.
   
 ## Future Improvements
-
-
+* **Asynchronous Processing:** Allow users to upload massive files (100+ pages) without the browser request timing out while the server processes the data in the background.
 
 
