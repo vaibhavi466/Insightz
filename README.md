@@ -1,10 +1,11 @@
-# INSIGHTZ : Yellow Ranger's doc-sage intel console
+# INSIGHTZ 
 
 Insightz helps you find information in your documents without doing the heavy lifting. Instead of reading through long, complex reports yourself, you upload them to the system. It reads them for you, so you can just ask it questions and get instant, accurate answers backed by proof from the original file.
 
 A secure, multi-user RAG (Retrieval-Augmented Generation) application that transforms unstructured documents (PDFs, Images, Notes) into a searchable knowledge base using Generative AI.
 
 ## Problem Statement: 4
+Yellow Ranger's doc-sage intel console
 
 ## Team Members
 
@@ -59,7 +60,11 @@ pypdf
 * **Step F: How to Use (Demo Flow):** Go to http://localhost:5173
 
 ## Working Features 
-<img width="1598" height="842" alt="Screenshot 2025-12-09 093510" src="https://github.com/user-attachments/assets/12d5dabb-c7de-468c-a8a7-2245360e884e" />
+* Semantic Search <img width="1183" height="420" alt="Screenshot 2025-12-09 101813" src="https://github.com/user-attachments/assets/ff99e080-0cc7-4a9c-a34a-a4fa798a0bd8" />
+* Quick & deep summary <img width="754" height="635" alt="Screenshot 2025-12-09 015958" src="https://github.com/user-attachments/assets/50549e50-5dc6-49c0-947e-c74963ef1d2a" />
+* Page Wise Summary <img width="1598" height="842" alt="Screenshot 2025-12-09 093510" src="https://github.com/user-attachments/assets/12d5dabb-c7de-468c-a8a7-2245360e884e" />
+
+
 
 ## Error Handling and reliability features
 * **Resilient Ingestion:** Uses a Zero-Crash policy—if AI classification fails, it safely falls back to rule-based labeling (e.g., “General” or “Picture”) so every file is always saved.
