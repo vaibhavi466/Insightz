@@ -38,6 +38,10 @@ User uploads a file → PDFs parsed with pdfplumber → Images analyzed via Gemi
 Phase B — Retrieval (Read):
 User enters a query → Query is embedded and matched against FAISS (top 3–5 chunks) → Retrieved context is inserted into an augmented prompt → Gemini-Flash-Latest generates the final answer.
 ## API Documentation
+* Generative Model:gemini-flash_latest
+* Embedding Model: text-embedding-004
+* Integration Library: LangChain Google GenAI
+
 
 ## SetUp Instructions
 * **Step A: Create the Virtual Environment:** python -m venv venv --> .\venv\Scripts\activate
