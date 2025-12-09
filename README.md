@@ -65,6 +65,8 @@ pypdf
 
 
 ## Error Handling and reliability features
+* **Resilient Ingestion:** Uses a Zero-Crash policy—if AI classification fails, it safely falls back to rule-based labeling (e.g., “General” or “Picture”) so every file is always saved.
+
 
 ## AI/ML integration details
 * RAG Pipeline: Chunking → Embeddings (text-embedding-004) → FAISS for semantic search.
