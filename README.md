@@ -59,10 +59,7 @@ pypdf
 * **Step F: How to Use (Demo Flow):** Go to http://localhost:5173
 
 ## Working Features 
-![Alt Text](<img width="1598" height="842" alt="Screenshot 2025-12-09 093510" src="https://github.com/user-attachments/assets/d06201e6-9549-4f1b-b6ee-bc536465612c" />)
-
-
-
+<img width="1598" height="842" alt="Screenshot 2025-12-09 093510" src="https://github.com/user-attachments/assets/12d5dabb-c7de-468c-a8a7-2245360e884e" />
 
 ## Error Handling and reliability features
 * **Resilient Ingestion:** Uses a Zero-Crash policy—if AI classification fails, it safely falls back to rule-based labeling (e.g., “General” or “Picture”) so every file is always saved.
