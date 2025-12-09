@@ -22,10 +22,20 @@ A secure, multi-user RAG (Retrieval-Augmented Generation) application that trans
 * **File Processing**	Pdfplumber
 
 ## Features Implemented
-
+Multi-Modal Ingestion: Processes PDFs, text, and images with OCR.
+Semantic Search: Answers natural-language questions from document content.
+Cross-Document Summary: Merges insights across multiple files.
+Page-Wise Breakdown: Summarizes PDFs page by page.
+Data Isolation: Each user accesses only their own files securely.
+Resilient Mode: Uses cached responses if the AI API rate-limits.
 
 ## System Architecture
 
+Phase A — Ingestion (Write):
+User uploads a file → PDFs parsed with pdfplumber → Images analyzed via Gemini Vision → Text is chunked (LangChain) → Chunks embedded using text-embedding-004 → Vectors stored in FAISS and metadata (filename, owner) saved in doc_store.json.
+
+Phase B — Retrieval (Read):
+User enters a query → Query is embedded and matched against FAISS (top 3–5 chunks) → Retrieved context is inserted into an augmented prompt → Gemini-Flash-Latest generates the final answer.
 ## API Documentation
 
 ## SetUp Instructions
