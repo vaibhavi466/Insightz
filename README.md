@@ -59,6 +59,8 @@ pypdf
 * **Step F: How to Use (Demo Flow):** Go to http://localhost:5173
 
 ## Working Features 
+![Alt Text](<img width="1598" height="842" alt="Screenshot 2025-12-09 093510" src="https://github.com/user-attachments/assets/bdd60145-2fdb-4991-9cd1-ad56635d213f" />)
+
 
 
 ## Error Handling and reliability features
