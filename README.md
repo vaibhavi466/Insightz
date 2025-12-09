@@ -64,13 +64,14 @@ pypdf
 * **Step F: How to Use (Demo Flow):** Go to http://localhost:5173
 
 ## Working Features 
+* Login Signup <img width="1781" height="889" alt="Screenshot 2025-12-09 102842" src="https://github.com/user-attachments/assets/d1b8ec4b-0dfc-475f-9b5a-01fae4a18c2b" />
 * Semantic Search <img width="1183" height="420" alt="Screenshot 2025-12-09 101813" src="https://github.com/user-attachments/assets/ff99e080-0cc7-4a9c-a34a-a4fa798a0bd8" />
 * Quick & deep summary <img width="754" height="635" alt="Screenshot 2025-12-09 015958" src="https://github.com/user-attachments/assets/50549e50-5dc6-49c0-947e-c74963ef1d2a" />
 * Page Wise Summary <img width="1598" height="842" alt="Screenshot 2025-12-09 093510" src="https://github.com/user-attachments/assets/12d5dabb-c7de-468c-a8a7-2245360e884e" />
-
-
+* Connection Report <img width="726" height="467" alt="Screenshot 2025-12-09 103048" src="https://github.com/user-attachments/assets/0e93791d-e360-46ce-a4fc-9d986cdb11c6" />
 
 ## Error Handling and reliability features
+
 * **Resilient Ingestion:** Uses a Zero-Crash policy—if AI classification fails, it safely falls back to rule-based labeling (e.g., “General” or “Picture”) so every file is always saved.
 * **Optimized Model Selection (gemini-flash-latest):** While the Free Tier imposes strict Requests Per Minute (RPM) limits, the model's speed ensures single transactions complete instantly, maximizing the usable throughput.
 
