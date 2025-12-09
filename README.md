@@ -39,6 +39,21 @@ User enters a query → Query is embedded and matched against FAISS (top 3–5 c
 ## API Documentation
 
 ## SetUp Instructions
+* **Step A: Create the Virtual Environment:** python -m venv venv --> .\venv\Scripts\activate
+* **Step B: Install Dependencies:** Create a file named  backend/requirements.txt and paste this: fastapi
+uvicorn
+python-multipart
+python-jose[cryptography]
+passlib[bcrypt]
+python-dotenv
+langchain
+langchain-google-genai
+langchain-community
+faiss-cpu
+pdfplumber
+pypdf
+--> run pip install -r requirements.txt
+
 
 
 ## Working Features 
