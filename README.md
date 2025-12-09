@@ -2,6 +2,8 @@
 
 Insightz helps you find information in your documents without doing the heavy lifting. Instead of reading through long, complex reports yourself, you upload them to the system. It reads them for you, so you can just ask it questions and get instant, accurate answers backed by proof from the original file.
 
+A secure, multi-user RAG (Retrieval-Augmented Generation) application that transforms unstructured documents (PDFs, Images, Notes) into a searchable knowledge base using Generative AI.
+
 ## Problem Statement: 4
 
 ## Team Members
@@ -12,11 +14,12 @@ Insightz helps you find information in your documents without doing the heavy li
 
 ## Tech Stack
 
-* **Frontend:** HTML,React.js
+* **Frontend:** HTML,React.js(Vite)
 * **Backend:** Python (FastAPI)
-* **AI Engine:** OpenAI (GEMINI)
+* **AI Engine:** OpenAI (GEMINI-FLASH-LATEST)
 * **Orchestration:** LangChain
 * **Vector Database:** Pinecone,FAISS
+* **File Processing**	Pdfplumber
 
 ## Features Implemented
 
