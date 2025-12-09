@@ -16,7 +16,7 @@ Insightz helps you find information in your documents without doing the heavy li
 * **Orchestration:** LangChain
 * **Vector Database:** Pinecone,FAISS
 
-##Features Implemented
+## Features Implemented
 
 
 
