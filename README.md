@@ -11,7 +11,7 @@ Yellow Ranger's doc-sage intel console
 
 1. **PUSHPALATA** (20232028) - (https://github.com/Pushpalata-S)
 2. **ARUSHI KHARE** (20232010) - (https://github.com/Arushikhare6)
-3. **VAIBHAVI** (20232055) - (https://github.com/vaibhavi466)
+3. **VAIBHAVI AGRAWAL** (20232055) - (https://github.com/vaibhavi466)
 
 ## Tech Stack
 
