@@ -218,8 +218,12 @@
         try {
             const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
             const data = await res.json();
-            status.innerText = `Success! Categorized as: ${data.category}`;
-            refreshDocs(); 
+            if (data.error) {
+                status.innerText = `Error: ${data.error}`;
+            } else {
+                status.innerText = `Success! Categorized as: ${data.category}`;
+                refreshDocs(); 
+            }
         } catch (e) { status.innerText = "Error: " + e.message; }
     }
 

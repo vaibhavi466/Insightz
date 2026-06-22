@@ -9,6 +9,19 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.messages import HumanMessage
 from langchain.docstore.document import Document
 
+class PatchedGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
+    output_dimensionality: int = 768
+
+    def __init__(self, **kwargs):
+        out_dim = kwargs.pop("output_dimensionality", 768)
+        super().__init__(**kwargs)
+        self.output_dimensionality = out_dim
+
+    def _prepare_request(self, text: str, **kwargs):
+        if "output_dimensionality" not in kwargs or kwargs["output_dimensionality"] is None:
+            kwargs["output_dimensionality"] = self.output_dimensionality
+        return super()._prepare_request(text, **kwargs)
+
 load_dotenv()
 
 DB_FILE = "doc_store.json"
@@ -81,16 +94,19 @@ def ingest_file(file_path):
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     chunks = text_splitter.split_documents(pages)
     
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-    new_db = FAISS.from_documents(chunks, embeddings)
-    
-    if os.path.exists("faiss_index"):
-        try:
-            old_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-            old_db.merge_from(new_db)
-            old_db.save_local("faiss_index")
-        except: new_db.save_local("faiss_index")
-    else: new_db.save_local("faiss_index")
+    try:
+        embeddings = PatchedGoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", output_dimensionality=768)
+        new_db = FAISS.from_documents(chunks, embeddings)
+        
+        if os.path.exists("faiss_index"):
+            try:
+                old_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+                old_db.merge_from(new_db)
+                old_db.save_local("faiss_index")
+            except: new_db.save_local("faiss_index")
+        else: new_db.save_local("faiss_index")
+    except Exception as e:
+        return {"error": f"Embedding error: {str(e)}"}
     
     save_metadata(original_filename, category, summary)
     return {"status": "Success", "category": category, "summary": summary}

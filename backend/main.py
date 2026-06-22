@@ -11,6 +11,19 @@ from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import FAISS
 from ingest import ingest_file
 
+class PatchedGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
+    output_dimensionality: int = 768
+
+    def __init__(self, **kwargs):
+        out_dim = kwargs.pop("output_dimensionality", 768)
+        super().__init__(**kwargs)
+        self.output_dimensionality = out_dim
+
+    def _prepare_request(self, text: str, **kwargs):
+        if "output_dimensionality" not in kwargs or kwargs["output_dimensionality"] is None:
+            kwargs["output_dimensionality"] = self.output_dimensionality
+        return super()._prepare_request(text, **kwargs)
+
 load_dotenv()
 
 app = FastAPI()
@@ -18,11 +31,13 @@ app = FastAPI()
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
 
 # --- DATA MODELS ---
 class DocumentSelection(BaseModel):
@@ -81,35 +96,53 @@ async def upload_document(file: UploadFile = File(...)):
 
 @app.get("/search")
 def search_documents(query: str):
-    if not os.path.exists("faiss_index"): return {"answer": "System offline. Please upload a document first."}
-    
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-    vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-    
-    # CORRECTED: Using 'gemini-flash-latest' (Stable)
-    llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
-    
-    qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=vector_store.as_retriever(), return_source_documents=True)
-    response = qa_chain.invoke({"query": query})
-    return {"answer": response['result'], "citation": f"Source: Page {response['source_documents'][0].metadata.get('page', 'Unknown')}"}
+    try:
+        if not os.path.exists("faiss_index"): return {"answer": "System offline. Please upload a document first.", "citation": "System"}
+        
+        embeddings = PatchedGoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", output_dimensionality=768)
+        vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+        
+        # CORRECTED: Using 'gemini-flash-latest' (Stable)
+        llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
+        
+        qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=vector_store.as_retriever(), return_source_documents=True)
+        response = qa_chain.invoke({"query": query})
+        
+        citation = "Source: Unknown"
+        if response.get('source_documents'):
+            citation = f"Source: Page {response['source_documents'][0].metadata.get('page', 'Unknown')}"
+            
+        return {"answer": response['result'], "citation": citation}
+    except Exception as e:
+        if "API key not valid" in str(e) or "API_KEY_INVALID" in str(e):
+            return {
+                "answer": "Error: The configured Gemini API key is invalid or missing. Please set a valid GOOGLE_API_KEY in your backend/.env file.",
+                "citation": "System Alert"
+            }
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/cross-summary")
 def generate_cross_summary(selection: DocumentSelection):
-    all_docs = load_json_db("doc_store.json")
-    selected_docs = [d for d in all_docs if d['filename'] in selection.filenames]
+    try:
+        all_docs = load_json_db("doc_store.json")
+        selected_docs = [d for d in all_docs if d['filename'] in selection.filenames]
+        
+        if not selected_docs: return {"cross_summary": "No matching documents found in selection."}
     
-    if not selected_docs: return {"cross_summary": "No matching documents found in selection."}
-
-    combined_text = ""
-    for d in selected_docs: combined_text += f"- File: {d['filename']} ({d['category']}): {d['summary']}\n"
-    
-    # CORRECTED: Using 'gemini-flash-latest' (Stable)
-    llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
-    
-    prompt = f"You are an Intelligence Analyst. Write a connection report based ONLY on these documents:\n{combined_text}\nIdentify relationships and combine information."
-    
-    response = llm.invoke(prompt)
-    return {"cross_summary": response.content}
+        combined_text = ""
+        for d in selected_docs: combined_text += f"- File: {d['filename']} ({d['category']}): {d['summary']}\n"
+        
+        # CORRECTED: Using 'gemini-flash-latest' (Stable)
+        llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
+        
+        prompt = f"You are an Intelligence Analyst. Write a connection report based ONLY on these documents:\n{combined_text}\nIdentify relationships and combine information."
+        
+        response = llm.invoke(prompt)
+        return {"cross_summary": response.content}
+    except Exception as e:
+        if "API key not valid" in str(e) or "API_KEY_INVALID" in str(e):
+            return {"cross_summary": "Error: The configured Gemini API key is invalid or missing. Please set a valid GOOGLE_API_KEY in your backend/.env file."}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
