@@ -52,3 +52,10 @@ frontend/.env
 frontend/.env.local
 frontend/.env.*
 
+# Insightz Local Database and Indexes
+backend/users.json
+backend/doc_store.json
+backend/faiss_index_*
+backend/query_cache.json
+backend/tmp_uploads/
+backend/temp_*

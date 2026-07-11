@@ -3,57 +3,451 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Doc-Sage Intel Console</title>
+    <title>Insightz Console</title>
     <style>
-        :root { --bg: #121212; --card: #1e1e1e; --accent: #f1c40f; --text: #e0e0e0; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         
-        /* SIDEBAR (Draggable Items) */
-        .sidebar { width: 300px; background: #181818; padding: 20px; border-right: 1px solid #333; display: flex; flex-direction: column; }
-        .sidebar h2 { color: var(--accent); margin-top: 0; font-size: 1.2rem; }
-        .doc-list { flex: 1; overflow-y: auto; margin-top: 10px; }
+        :root {
+            --bg-dark: #0f172a;
+            --bg-sidebar: #1e293b;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --accent: #0ea5e9;
+            --accent-hover: #0284c7;
+            --card-bg: rgba(30, 41, 59, 0.5);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: rgba(255, 255, 255, 0.08);
+            --danger: #ef4444;
+            --danger-hover: #dc2626;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* SIDEBAR */
+        .sidebar {
+            width: 320px;
+            background: var(--bg-sidebar);
+            padding: 24px;
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 10px 0 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .sidebar h2 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-top: 0;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sidebar-tip {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+
+        .doc-list {
+            flex: 1;
+            overflow-y: auto;
+            margin-top: 10px;
+            padding-right: 4px;
+        }
+
+        /* Modern Scrollbar */
+        .doc-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .doc-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .doc-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        .doc-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
         
         .doc-item { 
-            background: var(--card); padding: 10px; margin-bottom: 8px; border-radius: 6px; 
-            border: 1px solid #333; display: flex; align-items: center; cursor: grab; transition: 0.2s; 
+            background: var(--card-bg);
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            border-radius: 10px; 
+            border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            cursor: grab;
+            transition: all 0.2s ease;
         }
-        .doc-item:hover { border-color: var(--accent); }
-        .doc-item:active { cursor: grabbing; }
         
-        .doc-item input { margin-right: 10px; transform: scale(1.2); cursor: pointer; }
-        .doc-info { display: flex; flex-direction: column; pointer-events: none; /* Let clicks pass to parent for drag */ }
-        .doc-name { font-weight: bold; font-size: 0.9em; }
-        .doc-cat { font-size: 0.75em; color: #888; text-transform: uppercase; margin-top: 2px; }
+        .doc-item:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            transform: translateX(2px);
+        }
+        
+        .doc-item:active {
+            cursor: grabbing;
+        }
+        
+        .doc-item input {
+            margin-right: 12px;
+            transform: scale(1.15);
+            cursor: pointer;
+            accent-color: var(--primary);
+        }
+
+        .doc-info {
+            display: flex;
+            flex-direction: column;
+            pointer-events: none;
+        }
+
+        .doc-name {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--text-main);
+            word-break: break-all;
+        }
+
+        .doc-cat {
+            font-size: 0.7rem;
+            color: var(--accent);
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-top: 4px;
+            letter-spacing: 0.5px;
+        }
 
         /* MAIN CONTENT */
-        .main { flex: 1; padding: 30px; display: flex; flex-direction: column; overflow-y: auto; }
+        .main {
+            flex: 1;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
         
         /* UPLOAD ZONE */
-        .upload-zone { border: 2px dashed #444; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; transition: 0.3s; }
-        .upload-zone:hover { border-color: var(--accent); background: #1a1a1a; }
+        .upload-zone {
+            border: 2px dashed rgba(99, 102, 241, 0.3);
+            background: var(--card-bg);
+            padding: 30px;
+            text-align: center;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .upload-zone h3 {
+            margin-top: 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .upload-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 16px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        input[type="file"] {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        input[type="file"]::file-selector-button {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 12px;
+            font-family: inherit;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        input[type="file"]::file-selector-button:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
         
         /* TABS */
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-        .tab { padding: 10px 20px; cursor: pointer; border-radius: 4px; font-weight: bold; color: #888; }
-        .tab.active { background: var(--accent); color: #000; }
-        
-        /* ACTION PANELS (Drop Targets) */
-        .panel { display: none; border: 2px solid transparent; border-radius: 8px; padding: 10px; transition: 0.2s; }
-        .panel.active { display: block; animation: fadeIn 0.3s; }
-        
-        /* Dragover Effect */
-        .panel.drag-active { border-color: var(--accent); background: #252525; }
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+        }
 
-        input[type="text"] { width: 100%; padding: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
-        button.action-btn { background: var(--accent); border: none; padding: 10px 20px; color: black; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
-        button.action-btn:hover { background: #d4ac0d; }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            transition: all 0.2s ease;
+        }
+
+        .tab:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .tab.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+        }
+        
+        /* ACTION PANELS */
+        .panel {
+            display: none;
+            border: 1px solid var(--border-color);
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+        }
+
+        .panel.active {
+            display: block;
+            animation: fadeIn 0.4s ease-out;
+        }
+        
+        .panel.drag-active {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.08);
+            transform: scale(1.005);
+        }
+
+        .panel h3 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 16px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 16px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            color: white;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+        }
+
+        button.action-btn {
+            background: var(--primary);
+            border: none;
+            padding: 12px 24px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 16px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+            font-family: inherit;
+        }
+
+        button.action-btn:hover {
+            background: var(--primary-hover);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+            transform: translateY(-1px);
+        }
+
+        button.action-btn:active {
+            transform: translateY(1px);
+        }
 
         /* OUTPUT BOX */
-        .result-box { background: #222; padding: 20px; border-radius: 8px; border-left: 4px solid var(--accent); margin-top: 20px; min-height: 100px; white-space: pre-wrap; line-height: 1.6; }
+        .result-box {
+            background: rgba(15, 23, 42, 0.6);
+            padding: 24px;
+            border-radius: 8px;
+            border-left: 4px solid var(--primary);
+            margin-top: 24px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            line-height: 1.7;
+            font-size: 0.95rem;
+            color: #e2e8f0;
+            border-top: 1px solid var(--border-color);
+            border-right: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+        }
         
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    </style>
+        /* UTILITY BUTTONS */
+        .sidebar-btn {
+            margin-top: 12px;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            padding: 10px;
+            font-weight: 500;
+            font-size: 0.85rem;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s ease;
+            font-family: inherit;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
 
+        .sidebar-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .sidebar-btn.logout-btn {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+
+        .sidebar-btn.logout-btn:hover {
+            background: var(--danger);
+            color: white;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* MODAL STYLES */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal-content {
+            background-color: var(--bg-sidebar);
+            border: 1px solid var(--border-color);
+            padding: 30px;
+            border-radius: 16px;
+            width: 550px;
+            max-width: 90%;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 50px rgba(99, 102, 241, 0.15);
+            position: relative;
+            animation: modalSlide 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes modalSlide {
+            from { transform: scale(0.9) translateY(20px); opacity: 0; }
+            to { transform: scale(1) translateY(0); opacity: 1; }
+        }
+
+        .close-modal {
+            color: var(--text-muted);
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.2s ease;
+            position: absolute;
+            top: 20px;
+            right: 25px;
+            line-height: 1;
+        }
+
+        .close-modal:hover,
+        .close-modal:focus {
+            color: var(--danger);
+        }
+
+        #modalTitle {
+            margin-top: 0;
+            font-size: 1.3rem;
+            color: var(--text-main);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+            word-break: break-all;
+            padding-right: 30px;
+        }
+
+        #modalBody {
+            color: #e2e8f0;
+            line-height: 1.7;
+            font-size: 0.95rem;
+            margin: 0;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        #modalBody::-webkit-scrollbar {
+            width: 6px;
+        }
+        #modalBody::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #modalBody::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        #modalBody::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+    
     <script>
     // SECURITY CHECK
     if (!localStorage.getItem("ranger_token")) {
@@ -65,61 +459,96 @@
 <body>
 
     <div class="sidebar">
-        <h2>📂 Intel Library</h2>
-        <div style="font-size: 0.8em; color: #666; margin-bottom: 10px;">Drag files from here → Drop into panels</div>
+        <h2>📂 Document Library</h2>
+        <div class="sidebar-tip">Drag & drop files to panels for quick actions</div>
         <div id="docList" class="doc-list">
             <div style="color: #666; font-style: italic;">Loading...</div>
         </div>
-        <button onclick="refreshDocs()" style="margin-top: 10px; background: #333; color: white; border: none; padding: 8px; cursor: pointer; width: 100%;">🔄 Refresh List</button>
-        <button onclick="logout()" style="margin-top: 10px; background: #e74c3c; color: white; border: none; padding: 8px; cursor: pointer; width: 100%;">🛑 Logout</button>
+        <button class="sidebar-btn" onclick="refreshDocs()">🔄 Refresh List</button>
+        <button class="sidebar-btn logout-btn" onclick="logout()">🛑 Logout</button>
     </div>
 
     <div class="main">
-        <h1 style="color: var(--accent); margin-top: 0;">⚡ Yellow Ranger Console</h1>
+        <h1 style="color: var(--text-main); margin-top: 0; font-weight: 700; font-size: 2rem; letter-spacing: -0.5px;">Insightz Console</h1>
         
         <div class="upload-zone">
-            <h3>⬆️ Upload New Intel (From Laptop)</h3>
-            <input type="file" id="fileInput">
-            <button class="action-btn" onclick="uploadFile()">Upload File</button>
-            <p id="uploadStatus" style="color: #aaa; margin-top: 10px;"></p>
+            <h3>⬆️ Upload Document (PDF or Image)</h3>
+            <div class="upload-controls">
+                <input type="file" id="fileInput">
+                <button class="action-btn" style="margin-top: 0;" onclick="uploadFile()">Upload File</button>
+            </div>
+            <p id="uploadStatus" style="color: var(--text-muted); margin-top: 10px; font-size: 0.85rem;"></p>
         </div>
 
         <div class="tabs">
             <div class="tab active" onclick="switchTab('search')">🔍 Semantic Search</div>
-            <div class="tab" onclick="switchTab('cross')">🔗 Cross-Summary</div>
+            <div class="tab" onclick="switchTab('cross')">🔗 Cross-Document Analysis</div>
         </div>
 
         <div id="searchPanel" class="panel active" 
              ondrop="dropToSearch(event)" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
             <h3>Ask the Database</h3>
             <input type="text" id="queryInput" placeholder="Type here OR Drop a file from sidebar to focus on it...">
-            <button class="action-btn" onclick="performSearch()">Execute Search</button>
+            <button class="action-btn" onclick="performSearch()">Search Database</button>
             <div id="searchResult" class="result-box">Ready for query.</div>
         </div>
 
         <div id="crossPanel" class="panel"
              ondrop="dropToCross(event)" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
-            <h3>Connect Intelligence</h3>
-            <p>Select documents from sidebar (checkboxes) OR <b>Drag & Drop them here</b>.</p>
-            <button class="action-btn" onclick="performCrossSummary()">Generate Connection Report</button>
+            <h3>Cross-Document Analysis</h3>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Select documents from sidebar (checkboxes) OR <b>Drag & Drop them here</b>.</p>
+            <button class="action-btn" onclick="performCrossSummary()">Generate Synthesis Report</button>
             <div id="crossResult" class="result-box">Select files and click generate.</div>
         </div>
     </div>
 
-<script>
-    const API = "http://127.0.0.1:8000";
+    <!-- Custom Modal for Document Summary -->
+    <div id="summaryModal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <h3 id="modalTitle">Document Summary</h3>
+            <div id="modalBody"></div>
+        </div>
+    </div>
 
-    // --- LOGOUT FUNCTION ADDED HERE ---
+<script>
+    const API = window.INSIGHTZ_API_BASE || "http://127.0.0.1:8000";
+
+    // --- JWT API HELPER ---
+    async function fetchAPI(endpoint, options = {}) {
+        const token = localStorage.getItem("ranger_token");
+        if (!token) {
+            window.location.href = "login.html";
+            return;
+        }
+        
+        options.headers = options.headers || {};
+        options.headers["Authorization"] = `Bearer ${token}`;
+        
+        const res = await fetch(`${API}${endpoint}`, options);
+        
+        if (res.status === 401) {
+            localStorage.removeItem("ranger_token");
+            localStorage.removeItem("ranger_user");
+            window.location.href = "login.html";
+            throw new Error("Session expired. Please log in again.");
+        }
+        
+        return res;
+    }
+
+    // --- LOGOUT FUNCTION ---
     function logout() {
         localStorage.removeItem("ranger_token");
+        localStorage.removeItem("ranger_user");
         window.location.href = "login.html";
     }
 
     // --- DRAG AND DROP LOGIC ---
     
     function allowDrop(ev) {
-        ev.preventDefault(); // Essential to allow dropping
-        ev.currentTarget.classList.add('drag-active'); // Visual cue
+        ev.preventDefault();
+        ev.currentTarget.classList.add('drag-active');
     }
 
     function leaveDrop(ev) {
@@ -127,7 +556,6 @@
     }
 
     function drag(ev) {
-        // Send the filename when dragging starts
         ev.dataTransfer.setData("filename", ev.target.getAttribute('data-filename'));
     }
 
@@ -136,11 +564,8 @@
         ev.currentTarget.classList.remove('drag-active');
         const filename = ev.dataTransfer.getData("filename");
         if(filename) {
-            // Auto-fill the search box with a "Context" query
             const input = document.getElementById("queryInput");
             input.value = `Context: ${filename}. Summarize this document.`;
-            // Optional: Auto-execute
-            // performSearch(); 
         }
     }
 
@@ -150,52 +575,105 @@
         const filename = ev.dataTransfer.getData("filename");
         
         if(filename) {
-            // Find the checkbox in the sidebar and CHECK it
             const checkbox = document.querySelector(`.doc-select[value="${filename}"]`);
             if(checkbox) {
                 checkbox.checked = true;
-                // Visual confirmation
                 const out = document.getElementById("crossResult");
                 out.innerText = `[+] Added "${filename}" to selection. Drop more files or click Generate.`;
             }
         }
     }
 
-    // --- CORE FUNCTIONS (Same as before, updated HTML generation) ---
+    // --- MODAL FUNCTIONS ---
+    function showSummaryModal(summary, filename) {
+        document.getElementById("modalTitle").innerText = `📄 Summary: ${filename}`;
+        document.getElementById("modalBody").innerText = summary;
+        const modal = document.getElementById("summaryModal");
+        modal.style.display = "flex";
+    }
+
+    function closeModal() {
+        document.getElementById("summaryModal").style.display = "none";
+    }
+
+    // Close modal if user clicks outside of the modal content
+    window.onclick = function(event) {
+        const modal = document.getElementById("summaryModal");
+        if (event.target === modal) {
+            modal.style.display = "none";
+        }
+    }
+
+    // --- CORE FUNCTIONS ---
 
     async function refreshDocs() {
         const list = document.getElementById("docList");
         try {
-            const res = await fetch(`${API}/documents`);
+            const res = await fetchAPI("/documents");
             const docs = await res.json();
             
             list.innerHTML = "";
-            if(docs.length === 0) { list.innerHTML = "<div style='color:#666'>No docs found.</div>"; return; }
+            if(docs.length === 0) {
+                const emptyMsg = document.createElement("div");
+                emptyMsg.style.cssText = "color:#94a3b8; font-style: italic; font-size: 0.85rem;";
+                emptyMsg.textContent = "No documents uploaded yet.";
+                list.appendChild(emptyMsg);
+                return;
+            }
 
             docs.forEach(doc => {
                 const item = document.createElement("div");
                 item.className = "doc-item";
-                item.setAttribute('draggable', 'true'); // Make Draggable
-                item.setAttribute('data-filename', doc.filename); // Store ID
-                item.ondragstart = drag; // Attach Handler
+                item.setAttribute('draggable', 'true');
+                item.setAttribute('data-filename', doc.filename);
+                item.ondragstart = drag;
 
-                const safeSummary = doc.summary ? doc.summary.replace(/'/g, "\\'").replace(/"/g, '&quot;') : "No summary";
+                // Build inner structure with createElement + textContent (XSS-safe)
+                const wrapper = document.createElement("div");
+                wrapper.style.cssText = "display:flex; align-items:center; width:100%; pointer-events: none;";
 
-                item.innerHTML = `
-                    <div style="display:flex; align-items:center; width:100%; pointer-events: none;">
-                        <input type="checkbox" value="${doc.filename}" class="doc-select" style="pointer-events: auto;">
-                        <div class="doc-info" style="flex:1; padding-left: 10px;">
-                            <span class="doc-name">${doc.filename}</span>
-                            <span class="doc-cat">${doc.category}</span>
-                        </div>
-                        <button onclick="event.stopPropagation(); alert('${safeSummary}')" 
-                                style="pointer-events: auto; background:none; border:1px solid #555; color:#aaa; cursor:pointer; padding:2px 8px; font-size:0.8em; border-radius:4px;">
-                            📄
-                        </button>
-                    </div>
-                `;
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.value = doc.filename;
+                checkbox.className = "doc-select";
+                checkbox.style.pointerEvents = "auto";
+
+                const docInfo = document.createElement("div");
+                docInfo.className = "doc-info";
+                docInfo.style.cssText = "flex:1; padding-left: 10px;";
+
+                const nameSpan = document.createElement("span");
+                nameSpan.className = "doc-name";
+                nameSpan.textContent = doc.filename;
+
+                const catSpan = document.createElement("span");
+                catSpan.className = "doc-cat";
+                catSpan.textContent = doc.category;
+
+                docInfo.appendChild(nameSpan);
+                docInfo.appendChild(catSpan);
+
+                const infoBtn = document.createElement("button");
+                infoBtn.textContent = "📄 Info";
+                infoBtn.style.cssText = "pointer-events: auto; background:rgba(255,255,255,0.05); border:1px solid var(--border-color); color:var(--text-muted); cursor:pointer; padding:6px 10px; font-size:0.8em; border-radius:6px; transition: all 0.2s ease;";
+                infoBtn.addEventListener("mouseover", function() {
+                    this.style.background = 'rgba(99,102,241,0.1)';
+                    this.style.color = 'var(--primary)';
+                });
+                infoBtn.addEventListener("mouseout", function() {
+                    this.style.background = 'rgba(255,255,255,0.05)';
+                    this.style.color = 'var(--text-muted)';
+                });
+                infoBtn.addEventListener("click", function(event) {
+                    event.stopPropagation();
+                    showSummaryModal(doc.summary || "No summary available.", doc.filename);
+                });
+
+                wrapper.appendChild(checkbox);
+                wrapper.appendChild(docInfo);
+                wrapper.appendChild(infoBtn);
+                item.appendChild(wrapper);
                 
-                // Row click toggles checkbox (UX improvement)
                 item.onclick = function(e) {
                     if (e.target.type !== 'checkbox' && e.target.tagName !== 'BUTTON') {
                         const cb = this.querySelector(".doc-select");
@@ -205,21 +683,31 @@
                 
                 list.appendChild(item);
             });
-        } catch (e) { list.innerHTML = "<div style='color:red'>Server Offline</div>"; }
+        } catch (e) { 
+            console.error(e);
+            const errDiv = document.createElement("div");
+            errDiv.style.cssText = "color:#ef4444; font-size: 0.85rem;";
+            errDiv.textContent = "Server Connection Error";
+            list.innerHTML = "";
+            list.appendChild(errDiv);
+        }
     }
 
     async function uploadFile() {
         const fileInput = document.getElementById("fileInput");
         const status = document.getElementById("uploadStatus");
         if(!fileInput.files[0]) return alert("Select a file first!");
+        
         const formData = new FormData();
         formData.append("file", fileInput.files[0]);
         status.innerText = "Processing... (Reading & Categorizing)";
         try {
-            const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
+            const res = await fetchAPI("/upload", { method: "POST", body: formData });
             const data = await res.json();
             if (data.error) {
                 status.innerText = `Error: ${data.error}`;
+            } else if (data.detail) {
+                status.innerText = `Error: ${data.detail}`;
             } else {
                 status.innerText = `Success! Categorized as: ${data.category}`;
                 refreshDocs(); 
@@ -230,12 +718,14 @@
     async function performSearch() {
         const query = document.getElementById("queryInput").value;
         const out = document.getElementById("searchResult");
+        if (!query.trim()) return alert("Enter a search query!");
+        
         out.innerText = "Searching...";
         try {
-            const res = await fetch(`${API}/search?query=${encodeURIComponent(query)}`);
+            const res = await fetchAPI(`/search?query=${encodeURIComponent(query)}`);
             const data = await res.json();
             out.innerText = data.answer + "\n\n[" + data.citation + "]";
-        } catch (e) { out.innerText = "Error searching."; }
+        } catch (e) { out.innerText = "Error searching: " + e.message; }
     }
 
     async function performCrossSummary() {
@@ -243,16 +733,17 @@
         const checkboxes = document.querySelectorAll(".doc-select:checked");
         const selected = Array.from(checkboxes).map(cb => cb.value);
         if(selected.length === 0) return alert("Select at least 1 document!");
+        
         out.innerText = "Synthesizing Report...";
         try {
-            const res = await fetch(`${API}/cross-summary`, {
+            const res = await fetchAPI("/cross-summary", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({ filenames: selected })
             });
             const data = await res.json();
             out.innerText = data.cross_summary;
-        } catch (e) { out.innerText = "Error generating report."; }
+        } catch (e) { out.innerText = "Error generating report: " + e.message; }
     }
 
     function switchTab(tab) {
@@ -269,269 +760,6 @@
 </html>
 
 
-
-
-
-
-
-<!-- <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Doc-Sage Intel Console</title>
-    <style>
-        :root { --bg: #121212; --card: #1e1e1e; --accent: #f1c40f; --text: #e0e0e0; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
-        
-        /* SIDEBAR (Draggable Items) */
-        .sidebar { width: 300px; background: #181818; padding: 20px; border-right: 1px solid #333; display: flex; flex-direction: column; }
-        .sidebar h2 { color: var(--accent); margin-top: 0; font-size: 1.2rem; }
-        .doc-list { flex: 1; overflow-y: auto; margin-top: 10px; }
-        
-        .doc-item { 
-            background: var(--card); padding: 10px; margin-bottom: 8px; border-radius: 6px; 
-            border: 1px solid #333; display: flex; align-items: center; cursor: grab; transition: 0.2s; 
-        }
-        .doc-item:hover { border-color: var(--accent); }
-        .doc-item:active { cursor: grabbing; }
-        
-        .doc-item input { margin-right: 10px; transform: scale(1.2); cursor: pointer; }
-        .doc-info { display: flex; flex-direction: column; pointer-events: none; /* Let clicks pass to parent for drag */ }
-        .doc-name { font-weight: bold; font-size: 0.9em; }
-        .doc-cat { font-size: 0.75em; color: #888; text-transform: uppercase; margin-top: 2px; }
-
-        /* MAIN CONTENT */
-        .main { flex: 1; padding: 30px; display: flex; flex-direction: column; overflow-y: auto; }
-        
-        /* UPLOAD ZONE */
-        .upload-zone { border: 2px dashed #444; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; transition: 0.3s; }
-        .upload-zone:hover { border-color: var(--accent); background: #1a1a1a; }
-        
-        /* TABS */
-        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
-        .tab { padding: 10px 20px; cursor: pointer; border-radius: 4px; font-weight: bold; color: #888; }
-        .tab.active { background: var(--accent); color: #000; }
-        
-        /* ACTION PANELS (Drop Targets) */
-        .panel { display: none; border: 2px solid transparent; border-radius: 8px; padding: 10px; transition: 0.2s; }
-        .panel.active { display: block; animation: fadeIn 0.3s; }
-        
-        /* Dragover Effect */
-        .panel.drag-active { border-color: var(--accent); background: #252525; }
-
-        input[type="text"] { width: 100%; padding: 12px; background: #222; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
-        button.action-btn { background: var(--accent); border: none; padding: 10px 20px; color: black; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; }
-        button.action-btn:hover { background: #d4ac0d; }
-
-        /* OUTPUT BOX */
-        .result-box { background: #222; padding: 20px; border-radius: 8px; border-left: 4px solid var(--accent); margin-top: 20px; min-height: 100px; white-space: pre-wrap; line-height: 1.6; }
-        
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    </style>
-
-    <script>
-    // SECURITY CHECK
-    if (!localStorage.getItem("ranger_token")) {
-        window.location.href = "login.html";
-    }
-</script>
-
-</head>
-<body>
-
-    <div class="sidebar">
-        <h2>📂 Intel Library</h2>
-        <div style="font-size: 0.8em; color: #666; margin-bottom: 10px;">Drag files from here → Drop into panels</div>
-        <div id="docList" class="doc-list">
-            <div style="color: #666; font-style: italic;">Loading...</div>
-        </div>
-        <button onclick="refreshDocs()" style="margin-top: 10px; background: #333; color: white; border: none; padding: 8px; cursor: pointer;">🔄 Refresh List</button>
-    </div>
-
-    <div class="main">
-        <h1 style="color: var(--accent); margin-top: 0;">⚡ Yellow Ranger Console</h1>
-        
-        <div class="upload-zone">
-            <h3>⬆️ Upload New Intel (From Laptop)</h3>
-            <input type="file" id="fileInput">
-            <button class="action-btn" onclick="uploadFile()">Upload File</button>
-            <p id="uploadStatus" style="color: #aaa; margin-top: 10px;"></p>
-        </div>
-
-        <div class="tabs">
-            <div class="tab active" onclick="switchTab('search')">🔍 Semantic Search</div>
-            <div class="tab" onclick="switchTab('cross')">🔗 Cross-Summary</div>
-        </div>
-
-        <div id="searchPanel" class="panel active" 
-             ondrop="dropToSearch(event)" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
-            <h3>Ask the Database</h3>
-            <input type="text" id="queryInput" placeholder="Type here OR Drop a file from sidebar to focus on it...">
-            <button class="action-btn" onclick="performSearch()">Execute Search</button>
-            <div id="searchResult" class="result-box">Ready for query.</div>
-        </div>
-
-        <div id="crossPanel" class="panel"
-             ondrop="dropToCross(event)" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
-            <h3>Connect Intelligence</h3>
-            <p>Select documents from sidebar (checkboxes) OR <b>Drag & Drop them here</b>.</p>
-            <button class="action-btn" onclick="performCrossSummary()">Generate Connection Report</button>
-            <div id="crossResult" class="result-box">Select files and click generate.</div>
-        </div>
-    </div>
-
-<script>
-    const API = "http://127.0.0.1:8000";
-
-    // --- DRAG AND DROP LOGIC ---
-    
-    function allowDrop(ev) {
-        ev.preventDefault(); // Essential to allow dropping
-        ev.currentTarget.classList.add('drag-active'); // Visual cue
-    }
-
-    function leaveDrop(ev) {
-        ev.currentTarget.classList.remove('drag-active');
-    }
-
-    function drag(ev) {
-        // Send the filename when dragging starts
-        ev.dataTransfer.setData("filename", ev.target.getAttribute('data-filename'));
-    }
-
-    function dropToSearch(ev) {
-        ev.preventDefault();
-        ev.currentTarget.classList.remove('drag-active');
-        const filename = ev.dataTransfer.getData("filename");
-        if(filename) {
-            // Auto-fill the search box with a "Context" query
-            const input = document.getElementById("queryInput");
-            input.value = `Context: ${filename}. Summarize this document.`;
-            // Optional: Auto-execute
-            // performSearch(); 
-        }
-    }
-
-    function dropToCross(ev) {
-        ev.preventDefault();
-        ev.currentTarget.classList.remove('drag-active');
-        const filename = ev.dataTransfer.getData("filename");
-        
-        if(filename) {
-            // Find the checkbox in the sidebar and CHECK it
-            const checkbox = document.querySelector(`.doc-select[value="${filename}"]`);
-            if(checkbox) {
-                checkbox.checked = true;
-                // Visual confirmation
-                const out = document.getElementById("crossResult");
-                out.innerText = `[+] Added "${filename}" to selection. Drop more files or click Generate.`;
-            }
-        }
-    }
-
-    // --- CORE FUNCTIONS (Same as before, updated HTML generation) ---
-
-    async function refreshDocs() {
-        const list = document.getElementById("docList");
-        try {
-            const res = await fetch(`${API}/documents`);
-            const docs = await res.json();
-            
-            list.innerHTML = "";
-            if(docs.length === 0) { list.innerHTML = "<div style='color:#666'>No docs found.</div>"; return; }
-
-            docs.forEach(doc => {
-                const item = document.createElement("div");
-                item.className = "doc-item";
-                item.setAttribute('draggable', 'true'); // Make Draggable
-                item.setAttribute('data-filename', doc.filename); // Store ID
-                item.ondragstart = drag; // Attach Handler
-
-                const safeSummary = doc.summary ? doc.summary.replace(/'/g, "\\'").replace(/"/g, '&quot;') : "No summary";
-
-                item.innerHTML = `
-                    <div style="display:flex; align-items:center; width:100%; pointer-events: none;">
-                        <input type="checkbox" value="${doc.filename}" class="doc-select" style="pointer-events: auto;">
-                        <div class="doc-info" style="flex:1; padding-left: 10px;">
-                            <span class="doc-name">${doc.filename}</span>
-                            <span class="doc-cat">${doc.category}</span>
-                        </div>
-                        <button onclick="event.stopPropagation(); alert('${safeSummary}')" 
-                                style="pointer-events: auto; background:none; border:1px solid #555; color:#aaa; cursor:pointer; padding:2px 8px; font-size:0.8em; border-radius:4px;">
-                            📄
-                        </button>
-                    </div>
-                `;
-                
-                // Row click toggles checkbox (UX improvement)
-                item.onclick = function(e) {
-                    if (e.target.type !== 'checkbox' && e.target.tagName !== 'BUTTON') {
-                        const cb = this.querySelector(".doc-select");
-                        cb.checked = !cb.checked;
-                    }
-                };
-                
-                list.appendChild(item);
-            });
-        } catch (e) { list.innerHTML = "<div style='color:red'>Server Offline</div>"; }
-    }
-
-    async function uploadFile() {
-        const fileInput = document.getElementById("fileInput");
-        const status = document.getElementById("uploadStatus");
-        if(!fileInput.files[0]) return alert("Select a file first!");
-        const formData = new FormData();
-        formData.append("file", fileInput.files[0]);
-        status.innerText = "Processing... (Reading & Categorizing)";
-        try {
-            const res = await fetch(`${API}/upload`, { method: "POST", body: formData });
-            const data = await res.json();
-            status.innerText = `Success! Categorized as: ${data.category}`;
-            refreshDocs(); 
-        } catch (e) { status.innerText = "Error: " + e.message; }
-    }
-
-    async function performSearch() {
-        const query = document.getElementById("queryInput").value;
-        const out = document.getElementById("searchResult");
-        out.innerText = "Searching...";
-        try {
-            const res = await fetch(`${API}/search?query=${encodeURIComponent(query)}`);
-            const data = await res.json();
-            out.innerText = data.answer + "\n\n[" + data.citation + "]";
-        } catch (e) { out.innerText = "Error searching."; }
-    }
-
-    async function performCrossSummary() {
-        const out = document.getElementById("crossResult");
-        const checkboxes = document.querySelectorAll(".doc-select:checked");
-        const selected = Array.from(checkboxes).map(cb => cb.value);
-        if(selected.length === 0) return alert("Select at least 1 document!");
-        out.innerText = "Synthesizing Report...";
-        try {
-            const res = await fetch(`${API}/cross-summary`, {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({ filenames: selected })
-            });
-            const data = await res.json();
-            out.innerText = data.cross_summary;
-        } catch (e) { out.innerText = "Error generating report."; }
-    }
-
-    function switchTab(tab) {
-        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.getElementById(tab + 'Panel').classList.add('active');
-        event.target.classList.add('active');
-    }
-
-    refreshDocs();
-</script>
-
-</body>
-</html> -->
 
 
 

@@ -1,41 +1,79 @@
 import os
-import shutil
 import json
+import logging
+from uuid import uuid4
 from typing import List
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from datetime import datetime, timedelta, timezone
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Depends
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import FAISS
-from ingest import ingest_file
+from ingest import ingest_file, PatchedGoogleGenerativeAIEmbeddings, EMBEDDING_MODEL
 
-class PatchedGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
-    output_dimensionality: int = 768
-
-    def __init__(self, **kwargs):
-        out_dim = kwargs.pop("output_dimensionality", 768)
-        super().__init__(**kwargs)
-        self.output_dimensionality = out_dim
-
-    def _prepare_request(self, text: str, **kwargs):
-        if "output_dimensionality" not in kwargs or kwargs["output_dimensionality"] is None:
-            kwargs["output_dimensionality"] = self.output_dimensionality
-        return super()._prepare_request(text, **kwargs)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "insightz-super-secret-key-development-12345")
+ALGORITHM = "HS256"
+JWT_EXPIRY_HOURS = 24
+
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    if origin.strip()
+]
+MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20"))
+ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+security = HTTPBearer()
+
+def verify_password(plain_password, hashed_password):
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        logger.warning("Password verification failed (possibly non-bcrypt hash in DB)")
+        return False
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return username
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
 
 app = FastAPI()
 
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal Server Error: {str(exc)}"},
+    )
 
 
 
@@ -52,10 +90,15 @@ def load_json_db(filename):
     if not os.path.exists(filename): return []
     try:
         with open(filename, "r") as f: return json.load(f)
-    except: return []
+    except (json.JSONDecodeError, OSError) as e:
+        logger.error("Failed to load %s: %s", filename, e)
+        return []
 
 def save_json_db(filename, data):
-    with open(filename, "w") as f: json.dump(data, f, indent=4)
+    tmp_path = filename + ".tmp"
+    with open(tmp_path, "w") as f:
+        json.dump(data, f, indent=4)
+    os.replace(tmp_path, filename)
 
 # --- AUTH ENDPOINTS (The Missing Piece!) ---
 @app.post("/signup")
@@ -65,329 +108,150 @@ def signup(creds: UserCredentials):
     if any(u['username'] == creds.username for u in users):
         raise HTTPException(status_code=400, detail="Username already taken")
     
-    users.append(creds.dict())
+    hashed_password = pwd_context.hash(creds.password)
+    users.append({"username": creds.username, "password": hashed_password})
     save_json_db("users.json", users)
     return {"message": "Ranger registered successfully"}
 
 @app.post("/login")
 def login(creds: UserCredentials):
     users = load_json_db("users.json")
-    user = next((u for u in users if u['username'] == creds.username and u['password'] == creds.password), None)
+    user = next((u for u in users if u['username'] == creds.username), None)
     
-    if user:
-        return {"token": "valid_ranger_token", "username": user['username']}
+    if user and verify_password(creds.password, user['password']):
+        expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS)
+        token = jwt.encode({"sub": user['username'], "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
+        return {"token": token, "username": user['username']}
     else:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
 # --- DOCUMENT ENDPOINTS ---
 @app.get("/documents")
-def list_documents():
+def list_documents(current_user: str = Depends(get_current_user)):
     # This reads the doc_store.json to fill your sidebar
     docs = load_json_db("doc_store.json")
-    return [{"filename": d["filename"], "category": d["category"], "summary": d.get("summary", "No summary.")} for d in docs]
+    return [{"filename": d["filename"], "category": d["category"], "summary": d.get("summary", "No summary.")} 
+            for d in docs if d.get("username") == current_user]
 
 @app.post("/upload")
-async def upload_document(file: UploadFile = File(...)):
-    temp_filename = f"temp_{file.filename}"
-    with open(temp_filename, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
-    result = ingest_file(temp_filename)
-    if os.path.exists(temp_filename): os.remove(temp_filename)
-    return result
+async def upload_document(file: UploadFile = File(...), current_user: str = Depends(get_current_user)):
+    temp_filename = None
+    try:
+        # Validate file extension against allow-list
+        original_name = file.filename or ""
+        _, ext = os.path.splitext(original_name)
+        ext = ext.lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}"
+            )
+
+        # Generate safe temp filename (prevents path traversal)
+        temp_filename = f"temp_{uuid4().hex}{ext}"
+
+        # Stream to disk in 1 MB chunks with size enforcement
+        max_bytes = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+        bytes_written = 0
+        chunk_size = 1024 * 1024  # 1 MB
+        try:
+            with open(temp_filename, "wb") as buffer:
+                while True:
+                    chunk = await file.read(chunk_size)
+                    if not chunk:
+                        break
+                    bytes_written += len(chunk)
+                    if bytes_written > max_bytes:
+                        raise HTTPException(
+                            status_code=413,
+                            detail=f"File exceeds {MAX_UPLOAD_SIZE_MB} MB upload limit."
+                        )
+                    buffer.write(chunk)
+        except HTTPException:
+            raise
+        except OSError as e:
+            logger.error("Failed to write temp upload file: %s", e)
+            raise HTTPException(status_code=500, detail="Failed to save uploaded file.")
+
+        result = await run_in_threadpool(ingest_file, temp_filename, current_user)
+        if result and "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Unexpected error during upload")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if temp_filename and os.path.exists(temp_filename):
+            os.remove(temp_filename)
 
 @app.get("/search")
-def search_documents(query: str):
+def search_documents(query: str, current_user: str = Depends(get_current_user)):
     try:
-        if not os.path.exists("faiss_index"): return {"answer": "System offline. Please upload a document first.", "citation": "System"}
+        user_db_path = f"faiss_index_{current_user}"
+        if not os.path.exists(user_db_path): return {"answer": "System offline. Please upload a document first.", "citation": "System"}
+        embeddings = PatchedGoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, output_dimensionality=768, max_retries=3)
+        vector_store = FAISS.load_local(user_db_path, embeddings, allow_dangerous_deserialization=True)
         
-        embeddings = PatchedGoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001", output_dimensionality=768)
-        vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-        
-        # CORRECTED: Using 'gemini-flash-latest' (Stable)
-        llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
+        # Using gemini-2.5-flash-lite (high free tier quota)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0.3, max_retries=3)
         
         qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=vector_store.as_retriever(), return_source_documents=True)
         response = qa_chain.invoke({"query": query})
         
+        # Defense-in-depth: filter source docs to only those owned by the current user
+        source_docs = [
+            doc for doc in response.get('source_documents', [])
+            if doc.metadata.get('owner') == current_user
+        ]
+        
         citation = "Source: Unknown"
-        if response.get('source_documents'):
-            citation = f"Source: Page {response['source_documents'][0].metadata.get('page', 'Unknown')}"
+        if source_docs:
+            citation = f"Source: Page {source_docs[0].metadata.get('page', 'Unknown')}"
             
         return {"answer": response['result'], "citation": citation}
     except Exception as e:
-        if "API key not valid" in str(e) or "API_KEY_INVALID" in str(e):
+        error_msg = str(e)
+        if "API key not valid" in error_msg or "API_KEY_INVALID" in error_msg:
             return {
                 "answer": "Error: The configured Gemini API key is invalid or missing. Please set a valid GOOGLE_API_KEY in your backend/.env file.",
                 "citation": "System Alert"
             }
+        elif "429" in error_msg or "ResourceExhausted" in error_msg:
+            return {
+                "answer": "Error: The Gemini API rate limit has been exceeded. Please wait a moment before trying again.",
+                "citation": "System Rate Limit"
+            }
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/cross-summary")
-def generate_cross_summary(selection: DocumentSelection):
+def generate_cross_summary(selection: DocumentSelection, current_user: str = Depends(get_current_user)):
     try:
         all_docs = load_json_db("doc_store.json")
-        selected_docs = [d for d in all_docs if d['filename'] in selection.filenames]
+        selected_docs = [d for d in all_docs if d['filename'] in selection.filenames and d.get('username') == current_user]
         
         if not selected_docs: return {"cross_summary": "No matching documents found in selection."}
     
         combined_text = ""
         for d in selected_docs: combined_text += f"- File: {d['filename']} ({d['category']}): {d['summary']}\n"
         
-        # CORRECTED: Using 'gemini-flash-latest' (Stable)
-        llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
+        # Using gemini-2.5-flash-lite (high free tier quota)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0.3, max_retries=3)
         
         prompt = f"You are an Intelligence Analyst. Write a connection report based ONLY on these documents:\n{combined_text}\nIdentify relationships and combine information."
         
         response = llm.invoke(prompt)
         return {"cross_summary": response.content}
     except Exception as e:
-        if "API key not valid" in str(e) or "API_KEY_INVALID" in str(e):
+        error_msg = str(e)
+        if "API key not valid" in error_msg or "API_KEY_INVALID" in error_msg:
             return {"cross_summary": "Error: The configured Gemini API key is invalid or missing. Please set a valid GOOGLE_API_KEY in your backend/.env file."}
+        elif "429" in error_msg or "ResourceExhausted" in error_msg:
+            return {"cross_summary": "Error: The Gemini API rate limit has been exceeded. Please wait a moment before trying again."}
         raise HTTPException(status_code=500, detail=str(e))
 
+from fastapi.staticfiles import StaticFiles
 
-
-
-
-# import os
-# import shutil
-# from typing import List
-# from fastapi import FastAPI, UploadFile, File, HTTPException
-# from fastapi.middleware.cors import CORSMiddleware
-# from pydantic import BaseModel
-# from dotenv import load_dotenv
-# from pymongo import MongoClient  # <--- DATABASE DRIVER
-# from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-# from langchain.chains import RetrievalQA
-# from langchain_community.vectorstores import FAISS
-# from ingest import ingest_file
-
-# load_dotenv()
-
-# app = FastAPI()
-
-# # --- MONGODB CONNECTION ---
-# # This reads the string you just pasted in .env
-# MONGO_URI = os.getenv("MONGO_URI")
-# client = MongoClient(MONGO_URI)
-# db = client["ranger_intel_db"]  # Your Database Name
-# users_col = db["users"]         # Collection for Login
-# docs_col = db["documents"]      # Collection for Files
-
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
-
-# class DocumentSelection(BaseModel):
-#     filenames: List[str]
-
-# class UserCredentials(BaseModel):
-#     username: str
-#     password: str
-
-# # --- AUTH (USING MONGODB) ---
-# @app.post("/signup")
-# def signup(creds: UserCredentials):
-#     # Check Mongo for existing user
-#     if users_col.find_one({"username": creds.username}):
-#         raise HTTPException(status_code=400, detail="Username taken")
-    
-#     # Insert new user into Cloud
-#     users_col.insert_one(creds.dict())
-#     return {"message": "Ranger registered successfully"}
-
-# @app.post("/login")
-# def login(creds: UserCredentials):
-#     # Find user in Cloud
-#     user = users_col.find_one({"username": creds.username, "password": creds.password})
-#     if user:
-#         return {"token": "valid_ranger_token", "username": user['username']}
-#     else:
-#         raise HTTPException(status_code=401, detail="Invalid credentials")
-
-# # --- DOCUMENT MANAGEMENT (USING MONGODB) ---
-# @app.get("/documents")
-# def list_documents():
-#     # Fetch all docs from Cloud, hide the Mongo ID
-#     docs = list(docs_col.find({}, {"_id": 0}))
-#     return docs
-
-# @app.post("/upload")
-# async def upload_document(file: UploadFile = File(...)):
-#     temp_filename = f"temp_{file.filename}"
-#     with open(temp_filename, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
-    
-#     # Run AI Processing
-#     result = ingest_file(temp_filename)
-    
-#     if os.path.exists(temp_filename): os.remove(temp_filename)
-    
-#     if "error" in result:
-#         return result
-
-#     # SAVE TO MONGODB
-#     doc_data = {
-#         "filename": result["filename"],
-#         "category": result["category"],
-#         "summary": result["summary"]
-#     }
-    
-#     # Update if exists, otherwise Insert
-#     docs_col.update_one(
-#         {"filename": result["filename"]}, 
-#         {"$set": doc_data}, 
-#         upsert=True
-#     )
-    
-#     return result
-
-# # --- SEARCH & SUMMARY ---
-# @app.get("/search")
-# def search_documents(query: str):
-#     if not os.path.exists("faiss_index"): return {"answer": "System offline."}
-    
-#     embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-#     vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-#     llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
-    
-#     qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=vector_store.as_retriever(), return_source_documents=True)
-#     response = qa_chain.invoke({"query": query})
-#     return {"answer": response['result'], "citation": f"Source: Page {response['source_documents'][0].metadata.get('page', 'Unknown')}"}
-
-# @app.post("/cross-summary")
-# def generate_cross_summary(selection: DocumentSelection):
-#     # Fetch specific docs from Cloud
-#     selected_docs = list(docs_col.find({"filename": {"$in": selection.filenames}}))
-    
-#     if not selected_docs: return {"cross_summary": "No documents found."}
-
-#     combined_text = ""
-#     for d in selected_docs: combined_text += f"- File: {d['filename']} ({d['category']}): {d['summary']}\n"
-    
-#     llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
-#     prompt = f"Write a connection report:\n{combined_text}"
-#     response = llm.invoke(prompt)
-#     return {"cross_summary": response.content}
-
-
-
-
-
-
-# import os
-# import shutil
-# import json
-# from typing import List
-# from fastapi import FastAPI, UploadFile, File, HTTPException
-# from fastapi.middleware.cors import CORSMiddleware
-# from pydantic import BaseModel
-# from dotenv import load_dotenv
-# from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-# from langchain.chains import RetrievalQA
-# from langchain_community.vectorstores import FAISS
-# from ingest import ingest_file
-
-# load_dotenv()
-
-# app = FastAPI()
-
-# # Enable CORS
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
-
-# # --- DATA MODELS ---
-# class DocumentSelection(BaseModel):
-#     filenames: List[str]
-
-# class UserCredentials(BaseModel):
-#     username: str
-#     password: str
-
-# # --- DB HELPERS ---
-# def load_json_db(filename):
-#     if not os.path.exists(filename): return []
-#     try:
-#         with open(filename, "r") as f: return json.load(f)
-#     except: return []
-
-# def save_json_db(filename, data):
-#     with open(filename, "w") as f: json.dump(data, f, indent=4)
-
-# # --- AUTH ENDPOINTS ---
-# @app.post("/signup")
-# def signup(creds: UserCredentials):
-#     users = load_json_db("users.json")
-#     # Check if username exists
-#     if any(u['username'] == creds.username for u in users):
-#         raise HTTPException(status_code=400, detail="Username already taken")
-    
-#     users.append(creds.dict())
-#     save_json_db("users.json", users)
-#     return {"message": "Ranger registered successfully"}
-
-# @app.post("/login")
-# def login(creds: UserCredentials):
-#     users = load_json_db("users.json")
-#     user = next((u for u in users if u['username'] == creds.username and u['password'] == creds.password), None)
-    
-#     if user:
-#         # Return a simple token (in production, use JWT)
-#         return {"token": "valid_ranger_token", "username": user['username']}
-#     else:
-#         raise HTTPException(status_code=401, detail="Invalid credentials")
-
-# # --- CORE ENDPOINTS ---
-# @app.get("/documents")
-# def list_documents():
-#     docs = load_json_db("doc_store.json")
-#     return [{"filename": d["filename"], "category": d["category"], "summary": d.get("summary", "No summary.")} for d in docs]
-
-# @app.post("/upload")
-# async def upload_document(file: UploadFile = File(...)):
-#     temp_filename = f"temp_{file.filename}"
-#     with open(temp_filename, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
-#     result = ingest_file(temp_filename)
-#     if os.path.exists(temp_filename): os.remove(temp_filename)
-#     return result
-
-# @app.get("/search")
-# def search_documents(query: str):
-#     if not os.path.exists("faiss_index"): return {"answer": "System offline. Please upload a document first."}
-    
-#     embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-#     vector_store = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-    
-#     llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
-    
-#     qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=vector_store.as_retriever(), return_source_documents=True)
-#     response = qa_chain.invoke({"query": query})
-    
-#     return {"answer": response['result'], "citation": f"Source: Page {response['source_documents'][0].metadata.get('page', 'Unknown')}"}
-
-# @app.post("/cross-summary")
-# def generate_cross_summary(selection: DocumentSelection):
-#     all_docs = load_json_db("doc_store.json")
-#     selected_docs = [d for d in all_docs if d['filename'] in selection.filenames]
-    
-#     if not selected_docs: return {"cross_summary": "No matching documents found in selection."}
-
-#     combined_text = ""
-#     for d in selected_docs: combined_text += f"- File: {d['filename']} ({d['category']}): {d['summary']}\n"
-    
-#     llm = ChatGoogleGenerativeAI(model="gemini-flash-latest", temperature=0.3)
-#     prompt = f"You are an Intelligence Analyst. Write a connection report based ONLY on these documents:\n{combined_text}\nIdentify relationships and combine information."
-    
-#     response = llm.invoke(prompt)
-#     return {"cross_summary": response.content}
-
-
-
-
+# Serve the static frontend files
+app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")

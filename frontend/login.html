@@ -3,45 +3,175 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ranger Access Control</title>
+    <title>Insightz Portal</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background-color: #121212; color: #e0e0e0; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #1e1e1e; padding: 40px; border-radius: 8px; border: 1px solid #333; width: 350px; text-align: center; box-shadow: 0 0 20px rgba(241, 196, 15, 0.1); }
-        h1 { color: #f1c40f; margin-bottom: 30px; text-transform: uppercase; letter-spacing: 1px; }
-        input { width: 100%; padding: 12px; margin: 10px 0; background: #252525; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
-        input:focus { border-color: #f1c40f; outline: none; }
-        button { width: 100%; padding: 12px; background: #f1c40f; border: none; color: black; font-weight: bold; border-radius: 4px; cursor: pointer; margin-top: 10px; font-size: 1rem; }
-        button:hover { background: #d4ac0d; }
-        .toggle { margin-top: 20px; font-size: 0.9rem; color: #888; cursor: pointer; text-decoration: underline; }
-        .toggle:hover { color: #f1c40f; }
-        .error { color: #e74c3c; margin-top: 10px; font-size: 0.9rem; min-height: 20px; }
-        .hidden { display: none; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --error-color: #f87171;
+            --input-bg: rgba(15, 23, 42, 0.6);
+            --input-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 40px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            width: 360px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), 0 0 50px rgba(99, 102, 241, 0.1);
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-top: 0;
+            margin-bottom: 8px;
+            background: linear-gradient(to right, #a5b4fc, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px 16px;
+            margin: 8px 0;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            color: var(--text-main);
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        input::placeholder {
+            color: rgba(148, 163, 184, 0.6);
+        }
+
+        input:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary-gradient);
+            border: none;
+            color: white;
+            font-weight: 600;
+            font-size: 0.95rem;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 16px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            font-family: inherit;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        .toggle {
+            margin-top: 24px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+
+        .toggle:hover {
+            color: var(--primary);
+        }
+
+        .error {
+            color: var(--error-color);
+            margin-top: 16px;
+            font-size: 0.85rem;
+            min-height: 20px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1>⚡ Ranger Login</h1>
+    <h1>Insightz Portal</h1>
+    <div class="subtitle">Document Intelligence Platform</div>
     
     <div id="loginForm">
         <input type="text" id="l_user" placeholder="Username">
         <input type="password" id="l_pass" placeholder="Password">
-        <button onclick="login()">Access Console</button>
+        <button onclick="login()">Sign In</button>
         <div class="toggle" onclick="toggleMode()">New here? Create Account</div>
     </div>
 
     <div id="signupForm" class="hidden">
         <input type="text" id="s_user" placeholder="Choose Username">
         <input type="password" id="s_pass" placeholder="Choose Password">
-        <button onclick="signup()">Register Ranger</button>
-        <div class="toggle" onclick="toggleMode()">Have an account? Login</div>
+        <button onclick="signup()">Create Account</button>
+        <div class="toggle" onclick="toggleMode()">Have an account? Sign In</div>
     </div>
 
     <div id="msg" class="error"></div>
 </div>
 
 <script>
-    const API = "http://127.0.0.1:8000"; // Ensure this matches your Uvicorn port
+    const API = window.INSIGHTZ_API_BASE || "http://127.0.0.1:8000"; // Configurable via window.INSIGHTZ_API_BASE
 
     function toggleMode() {
         document.getElementById("loginForm").classList.toggle("hidden");
