@@ -1,123 +1,151 @@
-# INSIGHTZ 
+# Insightz: Production-Grade Multi-Tenant RAG Platform
 
-Insightz helps you find information in your documents without doing the heavy lifting. Instead of reading through long, complex reports yourself, you upload them to the system. It reads them for you, so you can just ask it questions and get instant, accurate answers backed by proof from the original file.
+[![FastAPI Badge](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Google Gemini Badge](https://img.shields.io/badge/Google%20Gemini-8E75C2?style=for-the-badge&logo=googlegemini&logoColor=white)](https://deepmind.google/technologies/gemini)
+[![FAISS Badge](https://img.shields.io/badge/FAISS-FF6F00?style=for-the-badge&logo=cpu&logoColor=white)](https://github.com/facebookresearch/faiss)
+[![LangChain Badge](https://img.shields.io/badge/LangChain-1C3C3A?style=for-the-badge&logo=chainlink&logoColor=white)](https://langchain.com)
+[![HTML5 & JS Badge](https://img.shields.io/badge/HTML5%20%26%20JS-E34F26?style=for-the-badge&logo=html5&logoColor=white)](#)
 
-A secure, multi-user RAG (Retrieval-Augmented Generation) application that transforms unstructured documents (PDFs, Images, Notes) into a searchable knowledge base using Generative AI.
+Insightz is a high-performance, multi-tenant Retrieval-Augmented Generation (RAG) application. It securely ingests unstructured multi-modal files (PDFs, Images, Notes), performs zero-shot document classification, and provides grounded Q&A capabilities with precise, audit-ready citations.
 
-## Problem Statement: 4
-Yellow Ranger's doc-sage intel console
+![App Screenshot](docs/hero.png)
 
-## Team Members
+---
 
-1. **PUSHPALATA** (20232028) - (https://github.com/Pushpalata-S)
-2. **ARUSHI KHARE** (20232010) - (https://github.com/Arushikhare6)
-3. **VAIBHAVI AGRAWAL** (20232055) - (https://github.com/vaibhavi466)
+## 🏗️ System Architecture
 
-## Tech Stack
+The system coordinates ingestion and retrieval through a multi-tenant isolation layer, backed by in-memory indexing to minimize latency.
 
-* **Frontend:** Vanilla HTML / JavaScript (served as static files by FastAPI)
-* **Backend:** Python (FastAPI)
-* **AI Engine:** Google Gemini (`gemini-2.5-flash-lite` for generation, `gemini-embedding-001` for embeddings)
-* **Orchestration:** LangChain
-* **Vector Database:** FAISS (per-user local indexes)
-* **File Processing:** pdfplumber (PDFs), Gemini Vision (images)
+```mermaid
+graph TD
+    subgraph Ingestion Flow (Write)
+        A[User Upload: PDF/Image] --> B[FastAPI Endpoint /upload]
+        B --> C{Validation & Guard}
+        C -->|Type Allowlist & Max Size| D[Secure Temp File: uuid4]
+        D --> E{File Parser}
+        E -->|PDF: pdfplumber| F[Page-wise Extraction]
+        E -->|Image: Gemini Vision| G[OCR & Transcription]
+        F & G --> H[Zero-Shot LLM Classifier]
+        H -->|Resume / Invoice / General / Picture| I[Recursive Character Text Splitter]
+        I -->|Configurable Chunks| J[Patched Gemini Embeddings]
+        J --> K[FAISS Vector DB: Disk]
+        K --> L[Atomic Write: doc_store.json]
+    end
 
-## Features Implemented
-* **Multi-Modal Ingestion:** Processes PDFs (page-by-page) and images (PNG, JPG, WebP) with Gemini Vision OCR.
-* **Semantic Search:** Answers natural-language questions from document content with page-level citations.
-* **Cross-Document Summary:** Merges insights across multiple selected files into a connection report.
-* **AI Classification:** Auto-categorizes documents as Resume, Invoice, Picture, or General using zero-shot LLM classification.
-* **Data Isolation:** Each user has their own FAISS index and document store — all endpoints enforce per-user ownership.
-* **JWT Authentication:** Secure signup/login with bcrypt password hashing, signed JWTs with 24-hour expiry.
-* **Resilient Mode:** Exponential-backoff retry logic on all embedding and LLM calls protects against API rate-limits (429 / ResourceExhausted). Classification failures gracefully fall back to rule-based labeling.
-* **Upload Security:** Path-traversal protection (UUID temp filenames), file-type allow-list, and configurable size limits (default 20 MB).
+    subgraph Retrieval Flow (Read)
+        M[User Query] --> N[FastAPI Endpoint /search]
+        N --> O{In-Memory FAISS Cache}
+        O -->|Hit| P[Get Vector Store Object]
+        O -->|Miss| Q[Load Local Index from Disk]
+        Q --> P
+        P --> R[Similarity Search: Top-k Chunks]
+        R --> S[Defense-in-depth: Owner Filter]
+        S --> T[Grounded Prompt Template]
+        T --> U[Gemini-2.5-Flash-Lite LLM]
+        U --> V[Citation Parser: Filename + Page]
+        V --> W[User Response]
+    end
+```
 
-## System Architecture
+---
 
-**Phase A — Ingestion (Write):**
-User uploads a file → PDFs parsed page-by-page with pdfplumber → Images analyzed via Gemini Vision → Text is chunked (LangChain `RecursiveCharacterTextSplitter`) → Chunks embedded using `gemini-embedding-001` (configurable via `EMBEDDING_MODEL` env var) → Vectors stored in a per-user FAISS index and metadata (filename, category, summary, owner) saved in `doc_store.json`.
+## ⚡ Key Engineering Highlights
 
-**Phase B — Retrieval (Read):**
-User enters a query → Query is embedded and matched against the user's FAISS index → Retrieved context is inserted into an augmented prompt → `gemini-2.5-flash-lite` generates the final answer with source page citations.
+* **True Multi-Tenant Isolation:** Complete storage and query-level segregation. Files are processed with user ownership metadata tags, FAISS indices are partitioned dynamically per-user, and search results undergo a defense-in-depth ownership check to prevent cross-tenant data leakage.
+* **In-Memory Index Caching:** Disk read overhead is eliminated for active users. The FAISS vector stores are cached in-memory, dropping query latencies to milliseconds. The cache for a user is automatically invalidated and purged upon a successful document upload.
+* **Anti-Hallucination Guardrails:** Generative responses are strictly bound to the retrieved context. The customized LLM prompt enforces a rigorous grounding constraint—if the context cannot answer the query, the model returns a clean `"I cannot find the answer in the provided documents."` instead of hallucinating facts.
+* **Audit-Ready citations:** Rather than referencing vague source files, every generated answer includes exact filename and page-level metadata citations (e.g., `Source: Resume.pdf (Page 2)`).
+* **Fault-Tolerant & Atomic I/O:** JSON database operations (`users.json`, `doc_store.json`) are completed atomically using `.tmp` files and `os.replace()` to ensure data integrity during server crashes. FAISS index updates are protected against merge failures.
+* **Configurable Hyperparameters:** Embedding dimensions and chunk sizes are completely externalized to environment configurations, facilitating immediate iteration on RAG performance.
 
-## API Documentation
-* **Generative Model:** `gemini-2.5-flash-lite`
-* **Embedding Model:** `gemini-embedding-001` (configurable via `EMBEDDING_MODEL` env var)
-* **Integration Library:** LangChain Google GenAI
+---
 
-## Setup Instructions
+## 🚀 Getting Started
 
 ### Prerequisites
 * Python 3.10+
-* A Google Gemini API key ([Get one here](https://aistudio.google.com/apikey))
+* Google Gemini API Key
 
-### Step 1: Clone & Enter the Project
-```bash
-git clone <repo-url>
-cd Insightz
-```
+### Installation
 
-### Step 2: Create a Virtual Environment
-```bash
-cd backend
-python -m venv venv
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/vaibhavi466/Insightz.git
+   cd Insightz
+   ```
 
-# Windows
-.\venv\Scripts\activate
+2. **Set Up the Virtual Environment:**
+   ```bash
+   cd backend
+   python -m venv venv
+   
+   # Windows
+   .\venv\Scripts\activate
+   # macOS / Linux
+   source venv/bin/activate
+   ```
 
-# macOS / Linux
-source venv/bin/activate
-```
+3. **Install Dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### Step 3: Install Dependencies
-```bash
-pip install -r requirements.txt
-```
+4. **Configure Environment Variables:**
+   Create a `.env` file in the `backend/` directory:
+   ```env
+   GOOGLE_API_KEY=your_gemini_api_key_here
+   JWT_SECRET_KEY=your_secure_jwt_secret_key
+   ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+   MAX_UPLOAD_SIZE_MB=20
+   EMBEDDING_MODEL=models/gemini-embedding-001
+   RAG_CHUNK_SIZE=1500
+   RAG_CHUNK_OVERLAP=150
+   ```
 
-### Step 4: Configure Environment Variables
-```bash
-cp .env.example .env
-# Edit .env and set your GOOGLE_API_KEY
-```
+5. **Start the API Server:**
+   ```bash
+   uvicorn main:app --reload
+   ```
 
-Available environment variables (see `.env.example`):
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GOOGLE_API_KEY` | *(required)* | Your Gemini API key |
-| `JWT_SECRET_KEY` | `insightz-super-...` | Secret for signing JWTs |
-| `ALLOWED_ORIGINS` | `http://localhost:5173,...` | Comma-separated CORS origins |
-| `MAX_UPLOAD_SIZE_MB` | `20` | Maximum upload file size in MB |
-| `EMBEDDING_MODEL` | `models/gemini-embedding-001` | Embedding model identifier |
+6. **Access the Console:**
+   Open **http://127.0.0.1:8000** in your browser. The FastAPI server serves the static Vanilla JS/HTML frontend directly.
 
-### Step 5: Start the Server
-```bash
-uvicorn main:app --reload
-```
+---
 
-### Step 6: Open the App
-Navigate to **http://127.0.0.1:8000** — the frontend is served directly by FastAPI (no separate Node.js/npm step needed).
+## ⚙️ Environment Variables
 
-## Working Features 
-* Login Signup <img width="1781" height="889" alt="Screenshot 2025-12-09 102842" src="https://github.com/user-attachments/assets/d1b8ec4b-0dfc-475f-9b5a-01fae4a18c2b" />
-* Semantic Search <img width="1183" height="420" alt="Screenshot 2025-12-09 101813" src="https://github.com/user-attachments/assets/ff99e080-0cc7-4a9c-a34a-a4fa798a0bd8" />
-* Quick & deep summary <img width="754" height="635" alt="Screenshot 2025-12-09 015958" src="https://github.com/user-attachments/assets/50549e50-5dc6-49c0-947e-c74963ef1d2a" />
-* Page Wise Summary <img width="1598" height="842" alt="Screenshot 2025-12-09 093510" src="https://github.com/user-attachments/assets/12d5dabb-c7de-468c-a8a7-2245340e884e" />
-* Connection Report <img width="726" height="467" alt="Screenshot 2025-12-09 103048" src="https://github.com/user-attachments/assets/0e93791d-e360-46ce-a4fc-9d986cdb11c6" />
+| Variable | Default Value | Description |
+|----------|---------------|-------------|
+| `GOOGLE_API_KEY` | *(Required)* | The Gemini API authentication key used by LangChain. |
+| `JWT_SECRET_KEY` | `insightz-super-secret-key-development-12345` | Key used to sign JWT session tokens. |
+| `ALLOWED_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated list of allowed CORS domains. |
+| `MAX_UPLOAD_SIZE_MB` | `20` | Max file upload limit enforced at backend stream. |
+| `EMBEDDING_MODEL` | `models/gemini-embedding-001` | LLM model identifier for document embeddings. |
+| `RAG_CHUNK_SIZE` | `1500` | Size of split text chunks in characters. |
+| `RAG_CHUNK_OVERLAP` | `150` | Overlap between adjacent split text chunks. |
 
-## Error Handling and Reliability Features
+---
 
-* **Resilient Ingestion:** Zero-crash policy — if AI classification fails, it safely falls back to rule-based labeling ("General") so every file is always saved.
-* **Exponential Backoff:** All embedding and LLM API calls retry with exponential backoff on 429 / ResourceExhausted errors.
-* **Atomic Writes:** JSON data files (`users.json`, `doc_store.json`) are written atomically via temp-file + `os.replace()` to prevent corruption on crashes.
-* **Safe Merge:** If merging new vectors into an existing FAISS index fails, the existing index is left untouched and an explicit error is returned.
+## 🔗 API Overview
 
-## AI/ML Integration Details
-* **RAG Pipeline:** Chunking → Embeddings (`gemini-embedding-001`) → FAISS for semantic search.
-* **LLM Reasoning:** `gemini-2.5-flash-lite` for summaries, Q&A, and cross-document insights.
-* **Zero-Shot Classification:** Auto-detects document type (Resume, Invoice, Picture, General) using LLM — no training data needed.
-* **Vision OCR:** Gemini Vision extracts text & meaning from images with proper MIME type detection.
+| Method | Endpoint | Auth | Request Body / Parameters | Description |
+|--------|----------|------|---------------------------|-------------|
+| `POST` | `/signup` | None | `{username, password}` | Registers a new tenant with a hashed password. |
+| `POST` | `/login` | None | `{username, password}` | Authenticates and returns a signed 24h JWT token. |
+| `POST` | `/upload` | JWT | `file` (Multipart form) | Securely parses, embeds, and indexes a file. |
+| `GET` | `/search` | JWT | `query` (Query parameter) | Semantic search query returning grounded answers & citations. |
+| `GET` | `/documents` | JWT | None | Lists meta records for files owned by the tenant. |
+| `POST` | `/cross-summary` | JWT | `{filenames}` | Synthesizes insights across multiple documents. |
 
-## Future Improvements
-* **Deployment:** Deploy to a cloud platform for production use.
-* **Persistent Vector Store:** Migrate from local FAISS files to a managed vector database for scalability.
-* **Background Processing:** Process large uploads asynchronously with progress tracking.
+---
+
+## 📸 UI Previews
+
+### 1. Tenant Authentication Portal
+![Login Interface](docs/login_preview.png)
+
+### 2. Semantic Search Console
+![Search Console](docs/search_preview.png)
+
+### 3. Multi-Modal Document Library
+![Upload Interface](docs/upload_preview.png)
