@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import bcrypt
 from uuid import uuid4
 from typing import List
 from datetime import datetime, timedelta, timezone
@@ -10,7 +11,6 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -40,14 +40,13 @@ ALLOWED_ORIGINS = [
 MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20"))
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-def verify_password(plain_password, hashed_password):
+def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
-        return pwd_context.verify(plain_password, hashed_password)
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
     except Exception:
-        logger.warning("Password verification failed (possibly non-bcrypt hash in DB)")
+        logger.warning("Password verification failed")
         return False
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> str:
@@ -116,7 +115,9 @@ def signup(creds: UserCredentials):
     if any(u['username'] == creds.username for u in users):
         raise HTTPException(status_code=400, detail="Username already taken")
     
-    hashed_password = pwd_context.hash(creds.password)
+    # Hash password using bcrypt directly
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(creds.password.encode('utf-8'), salt).decode('utf-8')
     users.append({"username": creds.username, "password": hashed_password})
     save_json_db("users.json", users)
     return {"message": "Ranger registered successfully"}
