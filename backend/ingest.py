@@ -12,7 +12,9 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.messages import HumanMessage
 from langchain.docstore.document import Document
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class PatchedGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
     output_dimensionality: int = 768
@@ -68,8 +70,11 @@ class PatchedGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
 
 load_dotenv()
 
-DB_FILE = "doc_store.json"
+DB_FILE = os.path.join(BASE_DIR, "doc_store.json")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
+
+RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "1500"))
+RAG_CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "150"))
 
 VALID_CATEGORIES = ["Resume", "Invoice", "Picture", "General"]
 
@@ -149,13 +154,13 @@ def ingest_file(file_path, username):
     try:
         if file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
             category, raw_text = process_image_with_gemini(file_path)
-            pages = [Document(page_content=raw_text, metadata={"source": file_path, "page": 1, "owner": username})]
+            pages = [Document(page_content=raw_text, metadata={"source": original_filename, "page": 1, "owner": username})]
             summary = raw_text[:200].replace("\n", " ") + "..."
             
         elif file_path.lower().endswith('.pdf'):
             pdf_pages = extract_text_from_pdf(file_path)
             if not pdf_pages: return {"error": "PDF is empty."}
-            pages = [Document(page_content=text, metadata={"source": file_path, "page": page_num, "owner": username})
+            pages = [Document(page_content=text, metadata={"source": original_filename, "page": page_num, "owner": username})
                      for page_num, text in pdf_pages]
             raw_text = "\n".join(text for _, text in pdf_pages)
             
@@ -184,15 +189,15 @@ def ingest_file(file_path, username):
         else: return {"error": "Unsupported format."}
     except Exception as e: return {"error": f"Error: {e}"}
 
-    # Embeddings - Larger chunk size to reduce API calls and stay within free tier limits
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=5000, chunk_overlap=500)
+    # Embeddings - chunk parameters tuneable via environment variables
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=RAG_CHUNK_SIZE, chunk_overlap=RAG_CHUNK_OVERLAP)
     chunks = text_splitter.split_documents(pages)
     
     try:
         embeddings = PatchedGoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, output_dimensionality=768, max_retries=3)
         new_db = FAISS.from_documents(chunks, embeddings)
         
-        user_db_path = f"faiss_index_{username}"
+        user_db_path = os.path.join(BASE_DIR, f"faiss_index_{username}")
         if os.path.exists(user_db_path):
             try:
                 old_db = FAISS.load_local(user_db_path, embeddings, allow_dangerous_deserialization=True)

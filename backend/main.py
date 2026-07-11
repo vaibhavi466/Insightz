@@ -16,9 +16,15 @@ from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import FAISS
+from langchain_core.prompts import PromptTemplate
 from ingest import ingest_file, PatchedGoogleGenerativeAIEmbeddings, EMBEDDING_MODEL
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error")
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# In-memory cache for loaded FAISS indices to avoid expensive disk reads
+_vector_store_cache = {}
 
 load_dotenv()
 
@@ -87,18 +93,20 @@ class UserCredentials(BaseModel):
 
 # --- DB HELPERS ---
 def load_json_db(filename):
-    if not os.path.exists(filename): return []
+    abs_path = os.path.join(BASE_DIR, filename)
+    if not os.path.exists(abs_path): return []
     try:
-        with open(filename, "r") as f: return json.load(f)
+        with open(abs_path, "r") as f: return json.load(f)
     except (json.JSONDecodeError, OSError) as e:
-        logger.error("Failed to load %s: %s", filename, e)
+        logger.error("Failed to load %s: %s", abs_path, e)
         return []
 
 def save_json_db(filename, data):
-    tmp_path = filename + ".tmp"
+    abs_path = os.path.join(BASE_DIR, filename)
+    tmp_path = abs_path + ".tmp"
     with open(tmp_path, "w") as f:
         json.dump(data, f, indent=4)
-    os.replace(tmp_path, filename)
+    os.replace(tmp_path, abs_path)
 
 # --- AUTH ENDPOINTS (The Missing Piece!) ---
 @app.post("/signup")
@@ -176,6 +184,11 @@ async def upload_document(file: UploadFile = File(...), current_user: str = Depe
         result = await run_in_threadpool(ingest_file, temp_filename, current_user)
         if result and "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
+        
+        # Invalidate FAISS in-memory cache for this user since index has changed
+        if result and result.get("status") == "Success":
+            _vector_store_cache.pop(current_user, None)
+            
         return result
     except HTTPException:
         raise
@@ -189,15 +202,36 @@ async def upload_document(file: UploadFile = File(...), current_user: str = Depe
 @app.get("/search")
 def search_documents(query: str, current_user: str = Depends(get_current_user)):
     try:
-        user_db_path = f"faiss_index_{current_user}"
+        user_db_path = os.path.join(BASE_DIR, f"faiss_index_{current_user}")
         if not os.path.exists(user_db_path): return {"answer": "System offline. Please upload a document first.", "citation": "System"}
-        embeddings = PatchedGoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, output_dimensionality=768, max_retries=3)
-        vector_store = FAISS.load_local(user_db_path, embeddings, allow_dangerous_deserialization=True)
+        
+        # Check in-memory cache first to avoid disk reads
+        vector_store = _vector_store_cache.get(current_user)
+        if not vector_store:
+            embeddings = PatchedGoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, output_dimensionality=768, max_retries=3)
+            vector_store = FAISS.load_local(user_db_path, embeddings, allow_dangerous_deserialization=True)
+            _vector_store_cache[current_user] = vector_store
         
         # Using gemini-2.5-flash-lite (high free tier quota)
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0.3, max_retries=3)
         
-        qa_chain = RetrievalQA.from_chain_type(llm=llm, retriever=vector_store.as_retriever(), return_source_documents=True)
+        # Define a grounded QA prompt to prevent hallucinations
+        qa_prompt_template = (
+            "You are an intelligent document analyst. Use only the following context to answer the question at the end.\n"
+            "If you do not know the answer or if the context does not contain enough information, say exactly "
+            "\"I cannot find the answer in the provided documents.\". Do not try to make up or hypothesize an answer.\n\n"
+            "Context:\n{context}\n\n"
+            "Question: {question}\n\n"
+            "Answer:"
+        )
+        QA_CHAIN_PROMPT = PromptTemplate(input_variables=["context", "question"], template=qa_prompt_template)
+        
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=llm,
+            retriever=vector_store.as_retriever(search_kwargs={"k": 4}),
+            chain_type_kwargs={"prompt": QA_CHAIN_PROMPT},
+            return_source_documents=True
+        )
         response = qa_chain.invoke({"query": query})
         
         # Defense-in-depth: filter source docs to only those owned by the current user
@@ -208,7 +242,9 @@ def search_documents(query: str, current_user: str = Depends(get_current_user)):
         
         citation = "Source: Unknown"
         if source_docs:
-            citation = f"Source: Page {source_docs[0].metadata.get('page', 'Unknown')}"
+            source_file = source_docs[0].metadata.get('source', 'Unknown')
+            source_page = source_docs[0].metadata.get('page', 'Unknown')
+            citation = f"Source: {source_file} (Page {source_page})"
             
         return {"answer": response['result'], "citation": citation}
     except Exception as e:
