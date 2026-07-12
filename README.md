@@ -148,6 +148,16 @@ graph TD
 
 ---
 
+## 🚀 Future Advancements (DS/MLE Portfolio Additions)
+
+* **RAG Evaluation Harness:** Integrate evaluation frameworks (like RAGAS or TruLens) to programmatically measure retrieval faithfulness, context recall, and answer relevance.
+* **Hybrid Retrieval Pipeline:** Combine sparse lexical search (BM25) with dense semantic search (FAISS) using reciprocal rank fusion (RRF) to retrieve both exact keyword matches and conceptual matches.
+* **OCR Fallback for Image-Only PDFs:** Incorporate an OCR pre-processing layer (such as Tesseract or Gemini Vision) to extract and index text from scanned, image-only PDF documents.
+* **Observability & Instrumentation:** Expand instrumentation with structured JSON logging and distributed tracing (e.g., OpenTelemetry / Langfuse) to track latency, token consumption, and API call costs per request.
+* **Automated Integration Testing:** Add a suite of end-to-end integration tests using `pytest` and FastAPI's `TestClient` to validate authentication workflows, file uploads, and search correctness in CI/CD.
+
+---
+
 ## 📸 UI Previews
 
 ### 1. Tenant Authentication Portal
