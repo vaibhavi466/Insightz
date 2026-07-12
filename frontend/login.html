@@ -180,10 +180,44 @@
         document.getElementById("msg").innerText = "";
     }
 
+    function validateInput(u, p) {
+        if (!u || !p) {
+            showMsg("Fill all fields");
+            return false;
+        }
+        if (u.length < 3 || u.length > 32) {
+            showMsg("Username must be between 3 and 32 characters.");
+            return false;
+        }
+        if (!/^[a-zA-Z0-9_-]+$/.test(u)) {
+            showMsg("Username can only contain letters, numbers, underscores, and hyphens.");
+            return false;
+        }
+        if (p.length < 8 || p.length > 72) {
+            showMsg("Password must be between 8 and 72 characters.");
+            return false;
+        }
+        return true;
+    }
+
+    async function handleResponseError(res, data) {
+        if (!res.ok) {
+            let errorMsg = data.detail;
+            if (Array.isArray(data.detail)) {
+                // Format FastAPI 422 ValidationError list
+                errorMsg = data.detail.map(err => {
+                    const field = err.loc[err.loc.length - 1];
+                    return `${field}: ${err.msg}`;
+                }).join(", ");
+            }
+            throw new Error(errorMsg || "An error occurred.");
+        }
+    }
+
     async function signup() {
-        const u = document.getElementById("s_user").value;
+        const u = document.getElementById("s_user").value.trim();
         const p = document.getElementById("s_pass").value;
-        if(!u || !p) return showMsg("Fill all fields");
+        if (!validateInput(u, p)) return;
 
         try {
             const res = await fetch(`${API}/signup`, {
@@ -192,7 +226,7 @@
                 body: JSON.stringify({username: u, password: p})
             });
             const data = await res.json();
-            if(!res.ok) throw new Error(data.detail);
+            await handleResponseError(res, data);
             
             showMsg("Success! Please login now.", "green");
             setTimeout(toggleMode, 1500);
@@ -200,9 +234,9 @@
     }
 
     async function login() {
-        const u = document.getElementById("l_user").value;
+        const u = document.getElementById("l_user").value.trim();
         const p = document.getElementById("l_pass").value;
-        if(!u || !p) return showMsg("Fill all fields");
+        if (!validateInput(u, p)) return;
 
         try {
             const res = await fetch(`${API}/login`, {
@@ -211,7 +245,7 @@
                 body: JSON.stringify({username: u, password: p})
             });
             const data = await res.json();
-            if(!res.ok) throw new Error(data.detail);
+            await handleResponseError(res, data);
 
             // SAVE TOKEN AND REDIRECT
             localStorage.setItem("ranger_token", data.token);
