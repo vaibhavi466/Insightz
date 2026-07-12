@@ -155,8 +155,8 @@ def save_metadata(filename, category, summary, username):
         json.dump(data, f, indent=4)
     os.replace(tmp_path, DB_FILE)
 
-def ingest_file(file_path, username):
-    original_filename = os.path.basename(file_path).replace("temp_", "")
+def ingest_file(file_path, username, original_filename=None):
+    original_filename = os.path.basename(original_filename or file_path).replace("temp_", "")
     pages = []
     category = "General"
     summary = "No summary."
@@ -211,6 +211,15 @@ def ingest_file(file_path, username):
         if os.path.exists(user_db_path):
             try:
                 old_db = FAISS.load_local(user_db_path, embeddings, allow_dangerous_deserialization=True)
+                
+                # Delete existing chunks for this specific document and owner to prevent duplicate stale vectors
+                ids_to_delete = [
+                    doc_id for doc_id, doc in old_db.docstore._dict.items()
+                    if doc.metadata.get("source") == original_filename and doc.metadata.get("owner") == username
+                ]
+                if ids_to_delete:
+                    old_db.delete(ids_to_delete)
+                    
                 old_db.merge_from(new_db)
                 old_db.save_local(user_db_path)
             except Exception as e:

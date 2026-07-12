@@ -186,7 +186,7 @@ async def upload_document(file: UploadFile = File(...), current_user: str = Depe
             logger.error("Failed to write temp upload file: %s", e)
             raise HTTPException(status_code=500, detail="Failed to save uploaded file.")
 
-        result = await run_in_threadpool(ingest_file, temp_filename, current_user)
+        result = await run_in_threadpool(ingest_file, temp_filename, current_user, original_name)
         if result and "error" in result:
             raise HTTPException(status_code=400, detail=result["error"])
         
@@ -233,7 +233,7 @@ def search_documents(query: str, current_user: str = Depends(get_current_user)):
         
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
-            retriever=vector_store.as_retriever(search_kwargs={"k": 4}),
+            retriever=vector_store.as_retriever(search_kwargs={"k": 4, "filter": {"owner": current_user}}),
             chain_type_kwargs={"prompt": QA_CHAIN_PROMPT},
             return_source_documents=True
         )
