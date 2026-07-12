@@ -147,6 +147,9 @@ def save_metadata(filename, category, summary, username):
     data = [d for d in data if not (d['filename'] == filename and d.get('username') == username)]
     data.append({"filename": filename, "category": category, "summary": summary, "username": username})
     
+    # NOTE: Atomic replacement ensures the file is not corrupted during a write crash,
+    # but does not prevent "lost updates" under high-concurrency read-modify-write races.
+    # Future migration to a relational database (e.g., SQLite) or file locking is recommended.
     tmp_path = DB_FILE + ".tmp"
     with open(tmp_path, "w") as f:
         json.dump(data, f, indent=4)

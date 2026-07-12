@@ -103,6 +103,9 @@ def load_json_db(filename):
 
 def save_json_db(filename, data):
     abs_path = os.path.join(BASE_DIR, filename)
+    # NOTE: Atomic replacement ensures the file is not corrupted during a write crash,
+    # but does not prevent "lost updates" under high-concurrency read-modify-write races.
+    # Future migration to a relational database (e.g., SQLite) or file locking is recommended.
     tmp_path = abs_path + ".tmp"
     with open(tmp_path, "w") as f:
         json.dump(data, f, indent=4)

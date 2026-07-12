@@ -59,3 +59,6 @@ backend/faiss_index_*
 backend/query_cache.json
 backend/tmp_uploads/
 backend/temp_*
+
+# Exclude configuration templates from generic .env ignores
+!backend/.env.example

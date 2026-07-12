@@ -139,6 +139,14 @@ graph TD
 
 ---
 
+## 🗺️ Future Roadmap
+
+* **Persistent SQL Database Integration:** Migrate the local flat-file storage (`users.json`, `doc_store.json`) to SQLite (using `aiosqlite` and `SQLAlchemy`) or add file locks (via the `filelock` package) to prevent concurrent "lost updates" and handle heavy multi-user write traffic safely.
+* **Production Managed Vector Store:** Transition from per-tenant FAISS files on disk to a managed vector database (e.g., Qdrant, Milvus, or Pgvector) to scale search capacity.
+* **Asynchronous Ingestion Queue:** Offload text chunking and LLM embedding steps to background task workers (e.g., Celery or RQ) to allow large file uploads without blocking request threads.
+
+---
+
 ## 📸 UI Previews
 
 ### 1. Tenant Authentication Portal
