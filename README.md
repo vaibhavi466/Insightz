@@ -134,17 +134,18 @@ graph TD
 | `POST` | `/signup` | None | `{username, password}` | Registers a new tenant with a hashed password. |
 | `POST` | `/login` | None | `{username, password}` | Authenticates and returns a signed 24h JWT token. |
 | `POST` | `/upload` | JWT | `file` (Multipart form) | Securely parses, embeds, and indexes a file. |
-| `GET` | `/search` | JWT | `query` (Query parameter) | Semantic search query returning grounded answers & citations. |
+| `POST` | `/search` | JWT | `{query}` (JSON body) | Semantic search query returning grounded answers & citations. |
 | `GET` | `/documents` | JWT | None | Lists meta records for files owned by the tenant. |
 | `POST` | `/cross-summary` | JWT | `{filenames}` | Synthesizes insights across multiple documents. |
+| `GET` | `/health` | None | None | Simple health check endpoint for load balancers. |
 
 ---
 
 ## 🗺️ Future Roadmap
 
-* **Persistent SQL Database Integration:** Migrate the local flat-file storage (`users.json`, `doc_store.json`) to SQLite (using `aiosqlite` and `SQLAlchemy`) or add file locks (via the `filelock` package) to prevent concurrent "lost updates" and handle heavy multi-user write traffic safely.
 * **Production Managed Vector Store:** Transition from per-tenant FAISS files on disk to a managed vector database (e.g., Qdrant, Milvus, or Pgvector) to scale search capacity.
 * **Asynchronous Ingestion Queue:** Offload text chunking and LLM embedding steps to background task workers (e.g., Celery or RQ) to allow large file uploads without blocking request threads.
+* **Frontend Component Framework Migration:** Port the Vanilla JS/HTML frontend to a modern component framework (e.g., React or Next.js) to manage complex client states and route authentication security securely (using HttpOnly cookies).
 
 ---
 
@@ -153,8 +154,6 @@ graph TD
 * **RAG Evaluation Harness:** Integrate evaluation frameworks (like RAGAS or TruLens) to programmatically measure retrieval faithfulness, context recall, and answer relevance.
 * **Hybrid Retrieval Pipeline:** Combine sparse lexical search (BM25) with dense semantic search (FAISS) using reciprocal rank fusion (RRF) to retrieve both exact keyword matches and conceptual matches.
 * **OCR Fallback for Image-Only PDFs:** Incorporate an OCR pre-processing layer (such as Tesseract or Gemini Vision) to extract and index text from scanned, image-only PDF documents.
-* **Observability & Instrumentation:** Expand instrumentation with structured JSON logging and distributed tracing (e.g., OpenTelemetry / Langfuse) to track latency, token consumption, and API call costs per request.
-* **Automated Integration Testing:** Add a suite of end-to-end integration tests using `pytest` and FastAPI's `TestClient` to validate authentication workflows, file uploads, and search correctness in CI/CD.
 
 ---
 
