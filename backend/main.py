@@ -29,8 +29,8 @@ _vector_store_cache = {}
 load_dotenv()
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-if not SECRET_KEY:
-    raise RuntimeError("JWT_SECRET_KEY environment variable is missing. Application cannot start.")
+if not SECRET_KEY or len(SECRET_KEY) < 32 or SECRET_KEY.startswith("insightz-super-secret-key"):
+    raise RuntimeError("JWT_SECRET_KEY environment variable is missing, is too short (minimum 32 characters), or is using an insecure default value.")
 ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24
 
