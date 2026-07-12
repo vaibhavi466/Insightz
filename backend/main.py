@@ -75,11 +75,10 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    import traceback
-    traceback.print_exc()
+    logger.exception("Global uncaught exception occurred")
     return JSONResponse(
         status_code=500,
-        content={"detail": f"Internal Server Error: {str(exc)}"},
+        content={"detail": "Internal Server Error"},
     )
 
 

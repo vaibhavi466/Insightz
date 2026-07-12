@@ -576,7 +576,7 @@
         const filename = ev.dataTransfer.getData("filename");
         
         if(filename) {
-            const checkbox = document.querySelector(`.doc-select[value="${filename}"]`);
+            const checkbox = document.querySelector(`.doc-select[value="${CSS.escape(filename)}"]`);
             if(checkbox) {
                 checkbox.checked = true;
                 const out = document.getElementById("crossResult");
