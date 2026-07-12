@@ -172,7 +172,7 @@
 </div>
 
 <script>
-    const API = window.INSIGHTZ_API_BASE || "http://127.0.0.1:8000"; // Configurable via window.INSIGHTZ_API_BASE
+    const API = window.INSIGHTZ_API_BASE || window.location.origin; // Configurable via window.INSIGHTZ_API_BASE
 
     function toggleMode() {
         document.getElementById("loginForm").classList.toggle("hidden");

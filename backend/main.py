@@ -87,6 +87,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 class DocumentSelection(BaseModel):
     filenames: List[str]
 
+class SearchRequest(BaseModel):
+    query: str
+
 class UserCredentials(BaseModel):
     username: str = Field(..., min_length=3, max_length=32, pattern=r"^[a-zA-Z0-9_-]+$")
     password: str = Field(..., min_length=8, max_length=72)
@@ -118,7 +121,11 @@ def save_json_db(filename, data):
         json.dump(data, f, indent=4)
     os.replace(tmp_path, abs_path)
 
-# --- AUTH ENDPOINTS (The Missing Piece!) ---
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
+# --- AUTH ENDPOINTS ---
 @app.post("/signup")
 def signup(creds: UserCredentials):
     users = load_json_db("users.json")
@@ -211,9 +218,10 @@ async def upload_document(file: UploadFile = File(...), current_user: str = Depe
         if temp_filename and os.path.exists(temp_filename):
             os.remove(temp_filename)
 
-@app.get("/search")
-def search_documents(query: str, current_user: str = Depends(get_current_user)):
+@app.post("/search")
+def search_documents(req: SearchRequest, current_user: str = Depends(get_current_user)):
     try:
+        query = req.query
         user_db_path = user_faiss_path(current_user)
         if not os.path.exists(user_db_path): return {"answer": "System offline. Please upload a document first.", "citation": "System"}
         

@@ -475,7 +475,7 @@
         <div class="upload-zone">
             <h3>⬆️ Upload Document (PDF or Image)</h3>
             <div class="upload-controls">
-                <input type="file" id="fileInput">
+                <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.webp">
                 <button class="action-btn" style="margin-top: 0;" onclick="uploadFile()">Upload File</button>
             </div>
             <p id="uploadStatus" style="color: var(--text-muted); margin-top: 10px; font-size: 0.85rem;"></p>
@@ -513,7 +513,7 @@
     </div>
 
 <script>
-    const API = window.INSIGHTZ_API_BASE || "http://127.0.0.1:8000";
+    const API = window.INSIGHTZ_API_BASE || window.location.origin;
 
     // --- JWT API HELPER ---
     async function fetchAPI(endpoint, options = {}) {
@@ -723,7 +723,11 @@
         
         out.innerText = "Searching...";
         try {
-            const res = await fetchAPI(`/search?query=${encodeURIComponent(query)}`);
+            const res = await fetchAPI("/search", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ query: query })
+            });
             const data = await res.json();
             out.innerText = data.answer + "\n\n[" + data.citation + "]";
         } catch (e) { out.innerText = "Error searching: " + e.message; }
