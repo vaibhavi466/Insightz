@@ -11,13 +11,13 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
-from ingest import ingest_file, PatchedGoogleGenerativeAIEmbeddings, EMBEDDING_MODEL
+from ingest import ingest_file, PatchedGoogleGenerativeAIEmbeddings, EMBEDDING_MODEL, user_faiss_path
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -28,7 +28,9 @@ _vector_store_cache = {}
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "insightz-super-secret-key-development-12345")
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY environment variable is missing. Application cannot start.")
 ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24
 
@@ -87,7 +89,7 @@ class DocumentSelection(BaseModel):
     filenames: List[str]
 
 class UserCredentials(BaseModel):
-    username: str
+    username: str = Field(..., min_length=3, max_length=32, pattern=r"^[a-zA-Z0-9_-]+$")
     password: str
 
 # --- DB HELPERS ---
@@ -203,7 +205,7 @@ async def upload_document(file: UploadFile = File(...), current_user: str = Depe
 @app.get("/search")
 def search_documents(query: str, current_user: str = Depends(get_current_user)):
     try:
-        user_db_path = os.path.join(BASE_DIR, f"faiss_index_{current_user}")
+        user_db_path = user_faiss_path(current_user)
         if not os.path.exists(user_db_path): return {"answer": "System offline. Please upload a document first.", "citation": "System"}
         
         # Check in-memory cache first to avoid disk reads

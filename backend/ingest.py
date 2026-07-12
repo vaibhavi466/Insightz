@@ -1,4 +1,5 @@
 import os
+import re
 import base64
 import json
 import logging
@@ -15,6 +16,12 @@ from langchain.docstore.document import Document
 logger = logging.getLogger("uvicorn.error")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def user_faiss_path(username: str) -> str:
+    """Validate username to prevent path traversal and return user FAISS index absolute path."""
+    if not re.match(r"^[a-zA-Z0-9_-]+$", username) or not (3 <= len(username) <= 32):
+        raise ValueError("Invalid username character pattern or length constraint.")
+    return os.path.join(BASE_DIR, f"faiss_index_{username}")
 
 class PatchedGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
     output_dimensionality: int = 768
@@ -197,7 +204,7 @@ def ingest_file(file_path, username):
         embeddings = PatchedGoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, output_dimensionality=768, max_retries=3)
         new_db = FAISS.from_documents(chunks, embeddings)
         
-        user_db_path = os.path.join(BASE_DIR, f"faiss_index_{username}")
+        user_db_path = user_faiss_path(username)
         if os.path.exists(user_db_path):
             try:
                 old_db = FAISS.load_local(user_db_path, embeddings, allow_dangerous_deserialization=True)
