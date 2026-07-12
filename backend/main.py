@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import bcrypt
+import time
 from uuid import uuid4
 from typing import List
 from datetime import datetime, timedelta, timezone
@@ -17,6 +18,14 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
+from sqlalchemy.orm import Session
+
+from database import get_db, User, DocumentMetadata, init_db
+from logger_setup import setup_json_logging
+
+# Initialize structured JSON logging
+setup_json_logging()
+
 from ingest import ingest_file, PatchedGoogleGenerativeAIEmbeddings, EMBEDDING_MODEL, user_faiss_path, EMBEDDING_DIM
 
 logger = logging.getLogger("uvicorn.error")
@@ -64,6 +73,10 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 
 app = FastAPI()
 
+@app.on_event("startup")
+def startup_event():
+    init_db()
+
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
@@ -101,64 +114,49 @@ class UserCredentials(BaseModel):
             raise ValueError("Password must not exceed 72 bytes in UTF-8 encoding.")
         return v
 
-# --- DB HELPERS ---
-def load_json_db(filename):
-    abs_path = os.path.join(BASE_DIR, filename)
-    if not os.path.exists(abs_path): return []
-    try:
-        with open(abs_path, "r") as f: return json.load(f)
-    except (json.JSONDecodeError, OSError) as e:
-        logger.error("Failed to load %s: %s", abs_path, e)
-        return []
-
-def save_json_db(filename, data):
-    abs_path = os.path.join(BASE_DIR, filename)
-    # NOTE: Atomic replacement ensures the file is not corrupted during a write crash,
-    # but does not prevent "lost updates" under high-concurrency read-modify-write races.
-    # Future migration to a relational database (e.g., SQLite) or file locking is recommended.
-    tmp_path = abs_path + ".tmp"
-    with open(tmp_path, "w") as f:
-        json.dump(data, f, indent=4)
-    os.replace(tmp_path, abs_path)
-
+# --- HEALTH ENDPOINT ---
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
 
 # --- AUTH ENDPOINTS ---
 @app.post("/signup")
-def signup(creds: UserCredentials):
-    users = load_json_db("users.json")
+def signup(creds: UserCredentials, db: Session = Depends(get_db)):
     # Check if username exists
-    if any(u['username'] == creds.username for u in users):
+    existing_user = db.query(User).filter(User.username == creds.username).first()
+    if existing_user:
         raise HTTPException(status_code=400, detail="Username already taken")
     
     # Hash password using bcrypt directly
     salt = bcrypt.gensalt()
     hashed_password = bcrypt.hashpw(creds.password.encode('utf-8'), salt).decode('utf-8')
-    users.append({"username": creds.username, "password": hashed_password})
-    save_json_db("users.json", users)
+    
+    new_user = User(username=creds.username, password=hashed_password)
+    db.add(new_user)
+    db.commit()
+    
+    logger.info("User registered successfully", extra={"operation": "signup", "username": creds.username})
     return {"message": "Ranger registered successfully"}
 
 @app.post("/login")
-def login(creds: UserCredentials):
-    users = load_json_db("users.json")
-    user = next((u for u in users if u['username'] == creds.username), None)
+def login(creds: UserCredentials, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == creds.username).first()
     
-    if user and verify_password(creds.password, user['password']):
+    if user and verify_password(creds.password, user.password):
         expire = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS)
-        token = jwt.encode({"sub": user['username'], "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
-        return {"token": token, "username": user['username']}
+        token = jwt.encode({"sub": user.username, "exp": expire}, SECRET_KEY, algorithm=ALGORITHM)
+        
+        logger.info("User logged in successfully", extra={"operation": "login", "username": creds.username})
+        return {"token": token, "username": user.username}
     else:
+        logger.warning("Failed login attempt", extra={"operation": "login", "username": creds.username})
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
 # --- DOCUMENT ENDPOINTS ---
 @app.get("/documents")
-def list_documents(current_user: str = Depends(get_current_user)):
-    # This reads the doc_store.json to fill your sidebar
-    docs = load_json_db("doc_store.json")
-    return [{"filename": d["filename"], "category": d["category"], "summary": d.get("summary", "No summary.")} 
-            for d in docs if d.get("username") == current_user]
+def list_documents(current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    docs = db.query(DocumentMetadata).filter(DocumentMetadata.username == current_user).all()
+    return [{"filename": d.filename, "category": d.category, "summary": d.summary} for d in docs]
 
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...), current_user: str = Depends(get_current_user)):
@@ -221,9 +219,11 @@ async def upload_document(file: UploadFile = File(...), current_user: str = Depe
 @app.post("/search")
 def search_documents(req: SearchRequest, current_user: str = Depends(get_current_user)):
     try:
+        start_time = time.time()
         query = req.query
         user_db_path = user_faiss_path(current_user)
-        if not os.path.exists(user_db_path): return {"answer": "System offline. Please upload a document first.", "citation": "System"}
+        if not os.path.exists(user_db_path): 
+            return {"answer": "System offline. Please upload a document first.", "citation": "System"}
         
         # Check in-memory cache first to avoid disk reads
         vector_store = _vector_store_cache.get(current_user)
@@ -266,6 +266,15 @@ def search_documents(req: SearchRequest, current_user: str = Depends(get_current
             source_page = source_docs[0].metadata.get('page', 'Unknown')
             citation = f"Source: {source_file} (Page {source_page})"
             
+        latency_ms = int((time.time() - start_time) * 1000)
+        logger.info(
+            "Semantic search processed successfully", 
+            extra={
+                "operation": "search",
+                "username": current_user,
+                "latency_ms": latency_ms
+            }
+        )
         return {"answer": response['result'], "citation": citation}
     except Exception as e:
         error_msg = str(e)
@@ -282,15 +291,19 @@ def search_documents(req: SearchRequest, current_user: str = Depends(get_current
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/cross-summary")
-def generate_cross_summary(selection: DocumentSelection, current_user: str = Depends(get_current_user)):
+def generate_cross_summary(selection: DocumentSelection, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        all_docs = load_json_db("doc_store.json")
-        selected_docs = [d for d in all_docs if d['filename'] in selection.filenames and d.get('username') == current_user]
+        start_time = time.time()
+        # Query matching document metadata via SQLAlchemy
+        selected_docs = db.query(DocumentMetadata).filter(
+            DocumentMetadata.filename.in_(selection.filenames),
+            DocumentMetadata.username == current_user
+        ).all()
         
         if not selected_docs: return {"cross_summary": "No matching documents found in selection."}
     
         combined_text = ""
-        for d in selected_docs: combined_text += f"- File: {d['filename']} ({d['category']}): {d['summary']}\n"
+        for d in selected_docs: combined_text += f"- File: {d.filename} ({d.category}): {d.summary}\n"
         
         # Using gemini-2.5-flash-lite (high free tier quota)
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0.3, max_retries=3)
@@ -298,6 +311,16 @@ def generate_cross_summary(selection: DocumentSelection, current_user: str = Dep
         prompt = f"You are an Intelligence Analyst. Write a connection report based ONLY on these documents:\n{combined_text}\nIdentify relationships and combine information."
         
         response = llm.invoke(prompt)
+        latency_ms = int((time.time() - start_time) * 1000)
+        logger.info(
+            "Cross summary processed successfully", 
+            extra={
+                "operation": "cross_summary",
+                "username": current_user,
+                "doc_count": len(selected_docs),
+                "latency_ms": latency_ms
+            }
+        )
         return {"cross_summary": response.content}
     except Exception as e:
         error_msg = str(e)

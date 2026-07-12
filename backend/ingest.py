@@ -5,10 +5,13 @@ import json
 import logging
 import mimetypes
 import pdfplumber
+import time
 from typing import List
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from database import SessionLocal, DocumentMetadata
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
@@ -79,7 +82,6 @@ class PatchedGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
                 else:
                     raise e
 
-DB_FILE = os.path.join(BASE_DIR, "doc_store.json")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
 
 RAG_CHUNK_SIZE = int(os.getenv("RAG_CHUNK_SIZE", "1500"))
@@ -139,25 +141,32 @@ def extract_text_from_pdf(pdf_path):
     return pages
 
 def save_metadata(filename, category, summary, username):
-    data = []
-    if os.path.exists(DB_FILE):
-        try:
-            with open(DB_FILE, "r") as f: data = json.load(f)
-        except (json.JSONDecodeError, OSError) as e:
-            logger.error("Failed to read %s: %s", DB_FILE, e)
-    
-    data = [d for d in data if not (d['filename'] == filename and d.get('username') == username)]
-    data.append({"filename": filename, "category": category, "summary": summary, "username": username})
-    
-    # NOTE: Atomic replacement ensures the file is not corrupted during a write crash,
-    # but does not prevent "lost updates" under high-concurrency read-modify-write races.
-    # Future migration to a relational database (e.g., SQLite) or file locking is recommended.
-    tmp_path = DB_FILE + ".tmp"
-    with open(tmp_path, "w") as f:
-        json.dump(data, f, indent=4)
-    os.replace(tmp_path, DB_FILE)
+    db = SessionLocal()
+    try:
+        # Delete existing metadata for this file + user to prevent duplicates
+        db.query(DocumentMetadata).filter(
+            DocumentMetadata.filename == filename,
+            DocumentMetadata.username == username
+        ).delete()
+        
+        # Insert new record
+        new_doc = DocumentMetadata(
+            filename=filename,
+            category=category,
+            summary=summary,
+            username=username
+        )
+        db.add(new_doc)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error("Failed to save metadata to database", exc_info=True, extra={"filename": filename, "username": username})
+        raise e
+    finally:
+        db.close()
 
 def ingest_file(file_path, username, original_filename=None):
+    start_time = time.time()
     if original_filename:
         original_filename = os.path.basename(original_filename)
     else:
@@ -242,4 +251,15 @@ def ingest_file(file_path, username, original_filename=None):
         return {"error": f"Embedding error: {error_msg}"}
     
     save_metadata(original_filename, category, summary, username)
+    latency_ms = int((time.time() - start_time) * 1000)
+    logger.info(
+        "Document ingestion completed successfully", 
+        extra={
+            "operation": "ingestion",
+            "username": username,
+            "filename": original_filename,
+            "category": category,
+            "latency_ms": latency_ms
+        }
+    )
     return {"status": "Success", "category": category, "summary": summary}
