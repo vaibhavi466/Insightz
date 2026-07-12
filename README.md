@@ -117,10 +117,11 @@ graph TD
 | Variable | Default Value | Description |
 |----------|---------------|-------------|
 | `GOOGLE_API_KEY` | *(Required)* | The Gemini API authentication key used by LangChain. |
-| `JWT_SECRET_KEY` | `insightz-super-secret-key-development-12345` | Key used to sign JWT session tokens. |
+| `JWT_SECRET_KEY` | *(Required)* | Key used to sign JWT session tokens. The application will crash on startup if this is missing. |
 | `ALLOWED_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated list of allowed CORS domains. |
 | `MAX_UPLOAD_SIZE_MB` | `20` | Max file upload limit enforced at backend stream. |
 | `EMBEDDING_MODEL` | `models/gemini-embedding-001` | LLM model identifier for document embeddings. |
+| `EMBEDDING_DIMENSIONS` | `768` | Output vector dimensionality for document embeddings. |
 | `RAG_CHUNK_SIZE` | `1500` | Size of split text chunks in characters. |
 | `RAG_CHUNK_OVERLAP` | `150` | Overlap between adjacent split text chunks. |
 

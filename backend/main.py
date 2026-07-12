@@ -17,7 +17,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import PromptTemplate
-from ingest import ingest_file, PatchedGoogleGenerativeAIEmbeddings, EMBEDDING_MODEL, user_faiss_path
+from ingest import ingest_file, PatchedGoogleGenerativeAIEmbeddings, EMBEDDING_MODEL, user_faiss_path, EMBEDDING_DIM
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -89,7 +89,7 @@ class DocumentSelection(BaseModel):
 
 class UserCredentials(BaseModel):
     username: str = Field(..., min_length=3, max_length=32, pattern=r"^[a-zA-Z0-9_-]+$")
-    password: str
+    password: str = Field(..., min_length=8, max_length=72)
 
 # --- DB HELPERS ---
 def load_json_db(filename):
@@ -161,7 +161,7 @@ async def upload_document(file: UploadFile = File(...), current_user: str = Depe
             )
 
         # Generate safe temp filename (prevents path traversal)
-        temp_filename = f"temp_{uuid4().hex}{ext}"
+        temp_filename = os.path.join(BASE_DIR, f"temp_{uuid4().hex}{ext}")
 
         # Stream to disk in 1 MB chunks with size enforcement
         max_bytes = MAX_UPLOAD_SIZE_MB * 1024 * 1024
@@ -213,7 +213,7 @@ def search_documents(query: str, current_user: str = Depends(get_current_user)):
         # Check in-memory cache first to avoid disk reads
         vector_store = _vector_store_cache.get(current_user)
         if not vector_store:
-            embeddings = PatchedGoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, output_dimensionality=768, max_retries=3)
+            embeddings = PatchedGoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, output_dimensionality=EMBEDDING_DIM, max_retries=3)
             vector_store = FAISS.load_local(user_db_path, embeddings, allow_dangerous_deserialization=True)
             _vector_store_cache[current_user] = vector_store
         
@@ -294,5 +294,7 @@ def generate_cross_summary(selection: DocumentSelection, current_user: str = Dep
 
 from fastapi.staticfiles import StaticFiles
 
+FRONTEND_DIR = os.path.join(BASE_DIR, "..", "frontend")
+
 # Serve the static frontend files
-app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

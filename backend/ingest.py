@@ -16,6 +16,7 @@ from langchain.docstore.document import Document
 logger = logging.getLogger("uvicorn.error")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIMENSIONS", "768"))
 
 def user_faiss_path(username: str) -> str:
     """Validate username to prevent path traversal and return user FAISS index absolute path."""
@@ -24,10 +25,10 @@ def user_faiss_path(username: str) -> str:
     return os.path.join(BASE_DIR, f"faiss_index_{username}")
 
 class PatchedGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
-    output_dimensionality: int = 768
+    output_dimensionality: int = EMBEDDING_DIM
 
     def __init__(self, **kwargs):
-        out_dim = kwargs.pop("output_dimensionality", 768)
+        out_dim = kwargs.pop("output_dimensionality", EMBEDDING_DIM)
         super().__init__(**kwargs)
         self.output_dimensionality = out_dim
 
@@ -204,7 +205,7 @@ def ingest_file(file_path, username, original_filename=None):
     chunks = text_splitter.split_documents(pages)
     
     try:
-        embeddings = PatchedGoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, output_dimensionality=768, max_retries=3)
+        embeddings = PatchedGoogleGenerativeAIEmbeddings(model=EMBEDDING_MODEL, output_dimensionality=EMBEDDING_DIM, max_retries=3)
         new_db = FAISS.from_documents(chunks, embeddings)
         
         user_db_path = user_faiss_path(username)
