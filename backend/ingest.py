@@ -160,7 +160,7 @@ def save_metadata(filename, category, summary, username):
         db.commit()
     except Exception as e:
         db.rollback()
-        logger.error("Failed to save metadata to database", exc_info=True, extra={"filename": filename, "username": username})
+        logger.error("Failed to save metadata to database", exc_info=True, extra={"doc_name": filename, "username": username})
         raise e
     finally:
         db.close()
@@ -257,7 +257,7 @@ def ingest_file(file_path, username, original_filename=None):
         extra={
             "operation": "ingestion",
             "username": username,
-            "filename": original_filename,
+            "doc_name": original_filename,
             "category": category,
             "latency_ms": latency_ms
         }

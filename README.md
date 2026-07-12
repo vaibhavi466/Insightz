@@ -18,7 +18,7 @@ The system coordinates ingestion and retrieval through a multi-tenant isolation 
 
 ```mermaid
 graph TD
-    subgraph Ingestion Flow (Write)
+    subgraph "Ingestion Flow (Write)"
         A[User Upload: PDF/Image] --> B[FastAPI Endpoint /upload]
         B --> C{Validation & Guard}
         C -->|Type Allowlist & Max Size| D[Secure Temp File: uuid4]
@@ -29,10 +29,10 @@ graph TD
         H -->|Resume / Invoice / General / Picture| I[Recursive Character Text Splitter]
         I -->|Configurable Chunks| J[Patched Gemini Embeddings]
         J --> K[FAISS Vector DB: Disk]
-        K --> L[Atomic Write: doc_store.json]
+        K --> L[Save Metadata: SQLite DB]
     end
 
-    subgraph Retrieval Flow (Read)
+    subgraph "Retrieval Flow (Read)"
         M[User Query] --> N[FastAPI Endpoint /search]
         N --> O{In-Memory FAISS Cache}
         O -->|Hit| P[Get Vector Store Object]
