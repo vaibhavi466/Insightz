@@ -7,6 +7,9 @@ import mimetypes
 import pdfplumber
 from typing import List
 from dotenv import load_dotenv
+
+load_dotenv()
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_community.vectorstores import FAISS
@@ -75,8 +78,6 @@ class PatchedGoogleGenerativeAIEmbeddings(GoogleGenerativeAIEmbeddings):
                     delay *= 2
                 else:
                     raise e
-
-load_dotenv()
 
 DB_FILE = os.path.join(BASE_DIR, "doc_store.json")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-001")
@@ -157,7 +158,14 @@ def save_metadata(filename, category, summary, username):
     os.replace(tmp_path, DB_FILE)
 
 def ingest_file(file_path, username, original_filename=None):
-    original_filename = os.path.basename(original_filename or file_path).replace("temp_", "")
+    if original_filename:
+        original_filename = os.path.basename(original_filename)
+    else:
+        base = os.path.basename(file_path)
+        if base.startswith("temp_"):
+            original_filename = base[5:]
+        else:
+            original_filename = base
     pages = []
     category = "General"
     summary = "No summary."
